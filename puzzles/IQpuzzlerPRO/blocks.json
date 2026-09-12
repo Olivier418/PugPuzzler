@@ -1,0 +1,115 @@
+{
+  "YELLOW": {
+    "letter": "A",
+    "rgb": [255, 221, 0],
+    "positions": [
+      [1, 1, 1, 1],
+      [0, 1, 0, 0]
+    ],
+    "terminal": {"bg": "YELLOW", "fg": "BLACK"}
+  },
+  "ORANGE": {
+    "letter": "B",
+    "rgb": [242, 146, 0],
+    "positions": [
+      [0, 0, 1],
+      [1, 1, 1],
+      [0, 1, 0]
+    ],
+    "terminal": {"bg": "LIGHTRED_EX", "fg": "BLACK"}
+  },
+  "RED": {
+    "letter": "C",
+    "rgb": [228, 6, 19],
+    "positions": [
+      [1, 1, 1, 1],
+      [1, 0, 0, 0]
+    ],
+    "terminal": {"bg": "RED", "fg": "WHITE"}
+  },
+  "DARKRED": {
+    "letter": "D",
+    "rgb": [181, 31, 32],
+    "positions": [
+      [1, 1, 0],
+      [0, 1, 1]
+    ],
+    "terminal": {"bg": "RED", "fg": "WHITE", "style": "DIM"}
+  },
+  "PINK": {
+    "letter": "E",
+    "rgb": [238, 110, 167],
+    "positions": [
+      [1, 1, 1, 0],
+      [0, 0, 1, 1]
+    ],
+    "terminal": {"bg": "LIGHTMAGENTA_EX", "fg": "WHITE", "style": "DIM"}
+  },
+  "PURPLE": {
+    "letter": "F",
+    "rgb": [131, 31, 130],
+    "positions": [
+      [1, 1, 0],
+      [0, 1, 1],
+      [0, 0, 1]
+    ],
+    "terminal": {"bg": "MAGENTA", "fg": "BLACK"}
+  },
+  "DARKBLUE": {
+    "letter": "G",
+    "rgb": [14, 65, 148],
+    "positions": [
+      [1, 1],
+      [1, 0],
+      [1, 0]
+    ],
+    "terminal": {"bg": "BLUE", "fg": "BLACK"}
+  },
+  "BLUE": {
+    "letter": "H",
+    "rgb": [0, 159, 227],
+    "positions": [
+      [1, 1, 1],
+      [0, 0, 1],
+      [0, 0, 1]
+    ],
+    "terminal": {"bg": "LIGHTBLUE_EX", "fg": "BLACK"}
+  },
+  "LIGHTBLUE": {
+    "letter": "I",
+    "rgb": [161, 218, 247],
+    "positions": [
+      [1, 0],
+      [1, 1]
+    ],
+    "terminal": {"bg": "CYAN", "fg": "BLACK"}
+  },
+  "LIGHTGREEN": {
+    "letter": "J",
+    "rgb": [137, 203, 193],
+    "positions": [
+      [1, 1, 1],
+      [1, 1, 0]
+    ],
+    "terminal": {"bg": "LIGHTGREEN_EX", "fg": "BLACK"}
+  },
+  "DARKGREEN": {
+    "letter": "K",
+    "rgb": [0, 142, 94],
+    "positions": [
+      [1, 1, 1],
+      [0, 1, 0]
+    ],
+    "terminal": {"bg": "GREEN", "fg": "BLACK"}
+  },
+  "GREEN": {
+    "letter": "L",
+    "rgb": [151, 193, 31],
+    "positions": [
+      [1, 1],
+      [1, 0],
+      [1, 1]
+    ],
+    "terminal": {"bg": "GREEN", "fg": "WHITE"}
+  }
+}

@@ -1,6 +1,6 @@
 from default_settings import WIDTH, HEIGHT, BLOCKS, EMPTY
 from example_puzzles import P72
-from classes import FlatGame, Block, Game
+from classes_old import FlatGame, Block, Game
 from tqdm import tqdm
 
 import numpy as np

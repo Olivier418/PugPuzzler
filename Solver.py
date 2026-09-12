@@ -1,39 +1,53 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from scipy.ndimage import label
 from partitioning import get_all_partitions
 from itertools import chain
+from constants import EMPTY, UNPLACED
+
+if TYPE_CHECKING:
+    # Only for the type hint below -- never imported at runtime, so this
+    # doesn't create a circular import with classes.py (which imports
+    # Solver at the top of the file).
+    from classes import Game
+
 
 class Solver:
-    def __init__(self, grid, placements, block_counts, label_structure=None):
-        self.grid = grid
-        self.label_structure = label_structure
-        self.placements = placements
-        self.block_counts = block_counts
-        self.preplaced = set()          # <-- track explicitly
+    """Brute-force / partition-pruned solver for a Game (or Puzzle).
 
-    def initialize_grid(self, grid):
-        unknown = {idx for idx in np.unique(grid)
-                   if idx != -1 and idx not in self.placements}
-        assert not unknown, f"unknown block index(es): {unknown}"
+    Only reads Game's public surface (board, blocks, placements,
+    chosen_placement_idx, grid, place(), remove(), copy()) -- no
+    knowledge of Puzzle's letter-grid loading or any other
+    subclass-specific behavior is required.
+    """
 
-        for idx in np.unique(grid):
-            if idx == -1:
-                continue
-            mask_indices = np.flatnonzero((grid == idx).ravel())
-            assert len(mask_indices) == self.block_counts[idx], \
-                f"block {idx}: {len(mask_indices)} cells given, expected {self.block_counts[idx]}"
+    def __init__(self, game: "Game"):
+        # A private working copy: place()/remove() mutate grid and
+        # chosen_placement_idx in lockstep as the search backtracks, but
+        # there's no reason that churn should be visible on (or tied to)
+        # the caller's own game. self.game.copy() is cheap -- setup
+        # (board/blocks/placements) is shared by reference, only the
+        # small per-instance grid + chosen_placement_idx dict are copied.
+        self.game = game.copy()
 
-            candidates = self.placements[idx]
-            if not np.any(np.all(candidates == mask_indices[np.newaxis, :], axis=1)):
-                raise ValueError(
-                    f"block {idx}: given cells don't match any valid "
-                    f"placement (wrong shape, disconnected, or out of bounds)"
-                )
-            self.preplaced.add(idx)
+        # Cached once per board/lattice; reused as scipy's connectivity
+        # structure for splitting the empty region into components.
+        self.label_structure = self.game.board.lattice.neighbor_structure
 
-        self.grid = grid
+        self.placements = self.game.placements
+        self.block_counts = {idx: block.count for idx, block in self.game.blocks.items()}
 
-   
+        # Blocks the game already considers placed (e.g. letters baked
+        # into a Puzzle's starting grid) are fixed and excluded from the
+        # search entirely.
+        self.preplaced = {
+            idx for idx, placement_idx in self.game.chosen_placement_idx.items()
+            if placement_idx != UNPLACED
+        }
+
     def _filter_block_mask(self, block_idx, block_mask, unavailable_flat):
         active_indices = np.flatnonzero(block_mask)
         if active_indices.size == 0:
@@ -62,7 +76,7 @@ class Solver:
 
         return pruned_masks
 
-    def solve(self, mode: int = 0, seed: int = None):
+    def solve(self, mode: int = 2, seed: int = None):
         if seed is not None:
             np.random.seed(seed)
             for arr in self.placements.values():
@@ -72,7 +86,9 @@ class Solver:
             if on_complete is not None:
                 yield from on_complete()
             else:
-                yield self.grid.copy()
+                # A full Game snapshot, independent of self.game (which
+                # keeps getting mutated as the search backtracks further).
+                yield self.game.copy()
 
         def rec(placement_masks, available_spots, on_complete=None):
             if not placement_masks:
@@ -136,17 +152,17 @@ class Solver:
             for placement_idx in np.flatnonzero(removed_mask):
                 placement = self.placements[next_block_idx][placement_idx]  # (count,) flat indices
 
-                self.grid.flat[placement] = next_block_idx
+                self.game.place_unchecked(next_block_idx, placement_idx)
                 available_spots.flat[placement] = False
 
                 yield from rec(pruned_masks, available_spots, on_complete)
 
-                self.grid.flat[placement] = -1
+                self.game.remove_unchecked(next_block_idx)
                 available_spots.flat[placement] = True
 
         initial_placement_masks = {
             idx: np.ones(self.placements[idx].shape[0], dtype=bool)
             for idx in self.block_counts if idx not in self.preplaced
         }
-        initial_available = (self.grid == -1)
+        initial_available = (self.game.grid == EMPTY)
         yield from rec(initial_placement_masks, initial_available)
