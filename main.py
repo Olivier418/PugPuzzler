@@ -5,25 +5,21 @@ from serialization import save_solutions, load_solutions
 from puzzles.IQpuzzler.components import main_puzzle_book, pyramid_puzzle_book
 from puzzles.IQpuzzlerPRO.components import alt_puzzle_book, pyramid_puzzle_book as pyramid_puzzle_book_PRO
 
-from benchmark import compare, run_benchmark, plot_benchmark
-
 from plot_difficultyspace import plot_difficulty_space
-
 import matplotlib.pyplot as plt
 
 
 if __name__=="__main__":
+    BASE_DIR = os.path.join("solutions","IQpuzzlerPRO")
+    solutions_path = os.path.join(BASE_DIR, "alt_solutions.json")
 
-    # solution_book = SolutionBook.from_puzzlebook(main_puzzle_book, disp=True)
+    # solution_book = SolutionBook.from_puzzlebook(alt_puzzle_book, disp=True)
+    # save_solutions(solution_book, solutions_path)
 
-    BASE_DIR = os.path.join("solutions","IQpuzzler")
-    main_solutions_path = os.path.join(BASE_DIR, "main_solutions.json")
-    # save_solutions(solution_book, main_solutions_path)
-
-    board = list(main_puzzle_book.values())[0].board
-    blocks = list(main_puzzle_book.values())[0].blocks
-
-    solution_book = load_solutions(main_solutions_path, board, blocks)
+    # Solutions were already computed and saved in a previous run: reload
+    # them using the setup main_puzzle_book already has, rather than
+    # re-running the expensive placement search a second time.
+    solution_book = load_solutions(solutions_path, alt_puzzle_book.setup)
 
     plot_difficulty_space(solution_book)
     plt.show()

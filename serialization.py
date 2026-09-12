@@ -6,7 +6,6 @@ from colorama import Back, Fore, Style
 from classes import (
     Block,
     BlockCollection,
-    Board,
     Puzzle,
     PuzzleBook,
     PuzzleSetup,
@@ -38,16 +37,14 @@ def load_block_collection(json_path: Path | str) -> BlockCollection:
     return BlockCollection(*blocks)
 
 
-# 2. Reusable puzzle loader taking a specific board instance
-def load_puzzles(file_path: Path | str, board: Board, blocks: BlockCollection) -> PuzzleBook:
+# 2. Reusable puzzle loader taking an already-built setup
+def load_puzzles(file_path: Path | str, setup: PuzzleSetup) -> PuzzleBook:
     with open(file_path, "r") as f:
         data = json.load(f)
 
-    # Computed once for the whole book: every puzzle shares the same board
-    # and block collection, so the (expensive) valid-placement search only
-    # needs to run a single time and is then shared by every Puzzle below.
-    setup = PuzzleSetup(blocks, board)
-
+    # setup (board + blocks + the expensive valid-placement search) is built
+    # once by the caller and shared by every Puzzle below -- and, via
+    # PuzzleBook.setup, by anyone loading this book's solutions later too.
     puzzles = [
         Puzzle(
             setup,
@@ -85,13 +82,15 @@ def save_solutions(solution_book: SolutionBook, file_path: Path | str) -> None:
         json.dump(grouped, f, indent=2)
 
 
-def load_solutions(file_path: Path | str, board: Board, blocks: BlockCollection) -> SolutionBook:
-    """Recover a previously-saved SolutionBook without re-solving anything."""
+def load_solutions(file_path: Path | str, setup: PuzzleSetup) -> SolutionBook:
+    """Recover a previously-saved SolutionBook without re-solving anything.
+
+    Pass the setup you already have -- e.g. `main_puzzle_book.setup` -- so
+    the (expensive) placement search isn't redone just to load solutions
+    for a board you've already set up.
+    """
     with open(file_path, "r") as f:
         data = json.load(f)
-
-    # Same reasoning as load_puzzles: one shared, expensive-to-compute setup.
-    setup = PuzzleSetup(blocks, board)
 
     solved_puzzles = [
         SolvedPuzzle(

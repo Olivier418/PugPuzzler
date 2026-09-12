@@ -8,7 +8,7 @@ from colorama import Style
 from constants import EMPTY, OUTSIDE_BOARD, UNPLACED
 from Solver import Solver
 
-from ._utils import _assert_unique
+from ._utils import _assert_unique, _shared
 from .blocks import Block, BlockCollection
 from .boards import Board
 
@@ -274,7 +274,7 @@ class Puzzle(Game):
     def _initialize_grid(self, letter_grid: np.ndarray, empty: str) -> None:
         arr = np.asarray(letter_grid).T
         if arr.shape != self.grid.shape:
-            raise ValueError("letter_grid is not the same shape as the board")
+            raise ValueError(f"letter_grid is not the same shape as the board in puzzle '{self.name}'.")
 
         # Map letters to indices
         letter_to_idx = {b.letter: idx for idx, b in self.blocks.items()}
@@ -287,7 +287,7 @@ class Puzzle(Game):
 
         # Vectorized boundary check for all letters at once (no np.isin needed)
         if not np.all(self.board.cells[placed_mask]):
-            raise ValueError("letter placed outside valid cell on the board")
+            raise ValueError(f"letter placed outside valid cell on the board in puzzle '{self.name}'")
 
         # Fill grid and validate placements
         for letter, idx in letter_to_idx.items():
@@ -309,7 +309,7 @@ class Puzzle(Game):
             )
 
             if matching_rows.size == 0:
-                raise ValueError(f"Block {letter} placement does not match any valid shape configuration")
+                raise ValueError(f"Block {letter} placement does not match any valid shape configuration in puzzle '{self.name}'.")
 
             # Record this block as placed so downstream consumers (e.g. Solver)
             # know it's fixed rather than free to place.
@@ -319,4 +319,17 @@ class Puzzle(Game):
 class PuzzleBook(UserDict):
     def __init__(self, *puzzles):
         _assert_unique(puzzles, lambda p: p.name, "puzzle name")
+        # Every puzzle in a book is built from one shared PuzzleSetup (that's
+        # the whole point -- see PuzzleSetup's docstring), so the book can
+        # expose it directly instead of making callers reach into an
+        # arbitrary puzzle's .setup themselves.
+        self.setup: PuzzleSetup = _shared(puzzles, lambda p: p.setup, "PuzzleSetup")
         super().__init__({p.name: p for p in puzzles})
+
+    @property
+    def board(self) -> Board:
+        return self.setup.board
+
+    @property
+    def blocks(self) -> BlockCollection:
+        return self.setup.blocks

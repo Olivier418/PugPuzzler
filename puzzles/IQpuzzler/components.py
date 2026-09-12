@@ -2,7 +2,8 @@ import os
 
 from classes import (
     FlatBoard,
-    PyramidBoard
+    PyramidBoard,
+    PuzzleSetup,
 )
 
 from serialization import load_block_collection, load_puzzles
@@ -17,10 +18,16 @@ BLOCKS = load_block_collection(os.path.join(BASE_DIR, "blocks.json"))
 main_board = FlatBoard(width=11, height=5)
 pyramid_board = PyramidBoard(5, 5)
 
+# One PuzzleSetup per board -- computed once here, then shared (via
+# PuzzleBook.setup) by every Puzzle in main_puzzle_book/pyramid_puzzle_book,
+# and by load_solutions later when loading that book's solved puzzles.
+main_setup = PuzzleSetup(BLOCKS, main_board)
+pyramid_setup = PuzzleSetup(BLOCKS, pyramid_board)
+
 # Load separate PuzzleBooks cleanly
 main_puzzle_book = load_puzzles(
-    os.path.join(BASE_DIR, "main_puzzles.json") , board=main_board, blocks=BLOCKS
+    os.path.join(BASE_DIR, "main_puzzles.json"), setup=main_setup
 )
 pyramid_puzzle_book = load_puzzles(
-    os.path.join(BASE_DIR, "pyramid_puzzles.json"), board=pyramid_board, blocks=BLOCKS
+    os.path.join(BASE_DIR, "pyramid_puzzles.json"), setup=pyramid_setup
 )

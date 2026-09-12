@@ -1,7 +1,9 @@
 from collections import UserDict
 
-from ._utils import _assert_unique
-from .puzzle import Puzzle, PuzzleBook
+from ._utils import _assert_unique, _shared
+from .boards import Board
+from .blocks import BlockCollection
+from .puzzle import Puzzle, PuzzleBook, PuzzleSetup
 
 
 class SolvedPuzzle:
@@ -14,7 +16,20 @@ class SolvedPuzzle:
 class SolutionBook(UserDict):
     def __init__(self, *solved_puzzles: SolvedPuzzle):
         _assert_unique(solved_puzzles, lambda sp: sp.puzzle.name, "puzzle name")
+        # Same reasoning as PuzzleBook.setup: every solution here traces back
+        # (via Game.copy's shallow copy) to the same PuzzleSetup as the
+        # original puzzles, so it's available as a single shared attribute
+        # rather than something callers dig out of sp.puzzle.setup themselves.
+        self.setup: PuzzleSetup = _shared(solved_puzzles, lambda sp: sp.puzzle.setup, "PuzzleSetup")
         super().__init__({sp.puzzle.name: sp for sp in solved_puzzles})
+
+    @property
+    def board(self) -> Board:
+        return self.setup.board
+
+    @property
+    def blocks(self) -> BlockCollection:
+        return self.setup.blocks
 
     @classmethod
     def from_puzzlebook(
