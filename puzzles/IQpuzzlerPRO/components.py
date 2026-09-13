@@ -8,7 +8,7 @@ from classes import (
     PyramidBoard
 )
 
-from classes.puzzle import PuzzleSetup
+from classes.puzzle import Puzzle, PuzzleSetup
 from serialization import load_block_collection, load_puzzles
 
 BASE_DIR = os.path.join("puzzles","IQpuzzlerPRO")
@@ -33,6 +33,10 @@ pyramid_board = PyramidBoard(5,5)
 main_setup = PuzzleSetup(BLOCKS, main_board)
 pyramid_setup = PuzzleSetup(BLOCKS, pyramid_board)
 alt_setup = PuzzleSetup(BLOCKS, alt_board)
+
+main_empty = Puzzle(main_setup, name="main_empty")
+pyramid_empty = Puzzle(pyramid_setup, name="pyramid_empty")
+alt_empty = Puzzle(alt_setup, name="alt_empty")
 
 # Load separate PuzzleBooks cleanly
 main_puzzle_book = load_puzzles(

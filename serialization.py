@@ -12,6 +12,7 @@ from classes import (
     SolutionBook,
     SolvedPuzzle,
 )
+from classes.solutions import Result
 
 
 # 1. Helper function to load blocks
@@ -69,25 +70,32 @@ def save_solutions(solution_book: SolutionBook, file_path: Path | str) -> None:
     """Persist an already-computed SolutionBook. Pure serialization: does
     no solving -- build the SolutionBook first via
     SolutionBook.from_puzzlebook(...)."""
-    grouped = [
-        {
-            "name": sp.puzzle.name,
-            "difficulty": sp.puzzle.difficulty,
-            "puzzle": grid_to_letter_rows(sp.puzzle.setup, sp.puzzle.grid),
-            "solutions": [grid_to_letter_rows(sol.setup, sol.grid) for sol in sp.solutions],
-        }
-        for sp in solution_book.values()
-    ]
+    data = {
+        "mode": solution_book.mode,
+        "seed": solution_book.seed,
+        "puzzles": [
+            {
+                "name": sp.puzzle.name,
+                "difficulty": sp.puzzle.difficulty,
+                "puzzle": grid_to_letter_rows(sp.puzzle.setup, sp.puzzle.grid),
+                "duration": sp.duration,
+                "results": [
+                    {
+                        "grid": grid_to_letter_rows(result.solution.setup, result.solution.grid),
+                        "elapsed": result.elapsed,
+                    }
+                    for result in sp.results
+                ],
+            }
+            for sp in solution_book.values()
+        ],
+    }
     with open(file_path, "w") as f:
-        json.dump(grouped, f, indent=2)
+        json.dump(data, f, indent=2)
 
 
 def load_solutions(file_path: Path | str, setup: PuzzleSetup) -> SolutionBook:
     """Recover a previously-saved SolutionBook without re-solving anything.
-
-    Pass the setup you already have -- e.g. `main_puzzle_book.setup` -- so
-    the (expensive) placement search isn't redone just to load solutions
-    for a board you've already set up.
     """
     with open(file_path, "r") as f:
         data = json.load(f)
@@ -100,16 +108,20 @@ def load_solutions(file_path: Path | str, setup: PuzzleSetup) -> SolutionBook:
                 name=item["name"],
                 difficulty=item["difficulty"],
             ),
-            solutions=[
-                Puzzle(
-                    setup,
-                    np.array(sol_grid, dtype=str),
-                    name=f"{item['name']} (solution {i + 1})",
-                    difficulty=item["difficulty"],
+            results=[
+                Result(
+                    solution=Puzzle(
+                        setup,
+                        np.array(res["grid"], dtype=str),
+                        name=f"{item['name']} (solution {i + 1})",
+                        difficulty=item["difficulty"],
+                    ),
+                    elapsed=res["elapsed"],
                 )
-                for i, sol_grid in enumerate(item["solutions"])
+                for i, res in enumerate(item["results"])
             ],
+            duration=item["duration"],
         )
-        for item in data
+        for item in data["puzzles"]
     ]
-    return SolutionBook(*solved_puzzles)
+    return SolutionBook(*solved_puzzles, mode=data["mode"], seed=data["seed"])

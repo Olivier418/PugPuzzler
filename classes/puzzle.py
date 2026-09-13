@@ -265,11 +265,12 @@ class Game:
 
 
 class Puzzle(Game):
-    def __init__(self, setup: PuzzleSetup, letter_grid: np.ndarray, name: str = "", difficulty: str = "starter", empty: str = ' '):
+    def __init__(self, setup: PuzzleSetup, letter_grid: np.ndarray = None, name: str = "", difficulty: str = None, empty: str = ' '):
         super().__init__(setup)
         self.name = name
         self.difficulty = difficulty
-        self._initialize_grid(letter_grid, empty)
+        if letter_grid is not None:
+            self._initialize_grid(letter_grid, empty)
 
     def _initialize_grid(self, letter_grid: np.ndarray, empty: str) -> None:
         arr = np.asarray(letter_grid).T

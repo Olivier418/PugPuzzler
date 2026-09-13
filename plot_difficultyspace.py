@@ -1,15 +1,9 @@
 import matplotlib.pyplot as plt
-from constants import EMPTY
+from constants import DIFFICULTY_COLORS, EMPTY
 
 from classes import SolutionBook
 
-difficulty_colors = {
-    "starter": "#AFC92A",
-    "junior": "#FABA1C",
-    "expert": "#E11121",
-    "master": "#015DA8",
-    "wizard": "#8D398E",
-}
+
 
 
 def plot_difficulty_space(solutions: SolutionBook, ax: plt.Axes = None) -> plt.Axes:
@@ -18,8 +12,8 @@ def plot_difficulty_space(solutions: SolutionBook, ax: plt.Axes = None) -> plt.A
     solved_puzzles = list(solutions.values())
 
     labels = [sp.puzzle.name for sp in solved_puzzles]
-    colors = [difficulty_colors[sp.puzzle.difficulty] for sp in solved_puzzles]
-    nr_solutions = [len(sp.solutions) for sp in solved_puzzles]
+    colors = [DIFFICULTY_COLORS[sp.puzzle.difficulty] for sp in solved_puzzles]
+    nr_solutions = [len(sp.results) for sp in solved_puzzles]
     nr_empty_spaces = [int((sp.puzzle.grid == EMPTY).sum()) for sp in solved_puzzles]
 
     if ax is None:
@@ -45,7 +39,7 @@ def plot_difficulty_space(solutions: SolutionBook, ax: plt.Axes = None) -> plt.A
     handles = [
         plt.Line2D([0], [0], marker="o", linestyle="", color=color,
                    label=difficulty, markersize=8)
-        for difficulty, color in difficulty_colors.items()
+        for difficulty, color in DIFFICULTY_COLORS.items()
     ]
     ax.legend(handles=handles, title="Difficulty", frameon=False, loc="best")
 
