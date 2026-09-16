@@ -13,8 +13,8 @@ from .blocks import Block, BlockCollection
 from .boards import Board
 
 
-class PuzzleSetup:
-    """The fixed setup shared by every puzzle in a book: a board, a block
+class Setup:
+    """The fixed setup shared by every game: a board, a block
     collection, and the (expensive to compute) valid placements for each
     block on that board.
 
@@ -101,8 +101,11 @@ class PuzzleSetup:
 
     def _validate(self):
         total_cells = sum(b.count for b in self.blocks.values())
-        if total_cells != np.sum(self.board.cells):
-            raise ValueError("Total block cells do not match board cells.")
+        board_cells = np.sum(self.board.cells)
+        if total_cells != board_cells:
+            raise ValueError(
+                f"Total block cells ({total_cells}) do not match board cells ({board_cells})."
+            )
 
         for idx, placements in self.placements.items():
             if len(placements) == 0:
@@ -170,9 +173,16 @@ class PuzzleSetup:
             print('  '.join(row_tuple))
 
 
-class Game:
-    def __init__(self, setup: PuzzleSetup):
+class State:
+    def __init__(self, setup: Setup):
         self.setup = setup
+
+        # Where this State's originating Puzzle/PuzzleBook was loaded from
+        # (a classes.source.Source), if it was loaded from disk at all.
+        # Populated by serialization.loading.load_game; stays None for
+        # anything constructed by hand. Solution.from_puzzle/from_puzzlebook
+        # read this to auto-save results to a mirrored solutions/ path.
+        self.source = None
 
         self.grid = self._fresh_grid()
         self.chosen_placement_idx = {idx: UNPLACED for idx in self.blocks.keys()}
@@ -264,8 +274,8 @@ class Game:
         self.setup.print_to_terminal(self.grid, print_letters)
 
 
-class Puzzle(Game):
-    def __init__(self, setup: PuzzleSetup, letter_grid: np.ndarray = None, name: str = "", difficulty: str = None, empty: str = ' '):
+class Puzzle(State):
+    def __init__(self, setup: Setup, letter_grid: np.ndarray = None, name: str = "", difficulty: str = None, empty: str = ' '):
         super().__init__(setup)
         self.name = name
         self.difficulty = difficulty
@@ -273,6 +283,13 @@ class Puzzle(Game):
             self._initialize_grid(letter_grid, empty)
 
     def _initialize_grid(self, letter_grid: np.ndarray, empty: str) -> None:
+        # Internal convention (see Setup.print_to_terminal): grids are
+        # shaped (width, depth). letter_grid, like boards.json's "cells",
+        # is authored the human-readable way -- one row per depth
+        # position, `width` entries per row, i.e. (depth, width) as
+        # written -- so it gets the same one-time transpose at this JSON
+        # boundary. See serialization.loading._cells_from_json for the
+        # board-cells counterpart of this exact rule.
         arr = np.asarray(letter_grid).T
         if arr.shape != self.grid.shape:
             raise ValueError(f"letter_grid is not the same shape as the board in puzzle '{self.name}'.")
@@ -318,13 +335,19 @@ class Puzzle(Game):
 
 
 class PuzzleBook(UserDict):
-    def __init__(self, *puzzles):
+    def __init__(self, *puzzles, name: str = None):
         _assert_unique(puzzles, lambda p: p.name, "puzzle name")
         # Every puzzle in a book is built from one shared PuzzleSetup (that's
         # the whole point -- see PuzzleSetup's docstring), so the book can
         # expose it directly instead of making callers reach into an
         # arbitrary puzzle's .setup themselves.
-        self.setup: PuzzleSetup = _shared(puzzles, lambda p: p.setup, "PuzzleSetup")
+        self.setup: Setup = _shared(puzzles, lambda p: p.setup, "PuzzleSetup")
+        self.name = name
+
+        # Same idea as State.source: where this book was loaded from, if
+        # anywhere. Populated by serialization.loading.load_game.
+        self.source = None
+
         super().__init__({p.name: p for p in puzzles})
 
     @property

@@ -1,20 +1,24 @@
 from .lattice import Lattice
 from .blocks import Block, BlockCollection
-from .boards import Board, FlatBoard, PyramidBoard
-from .puzzle import PuzzleSetup, Game, Puzzle, PuzzleBook
-from .solutions import SolvedPuzzle, SolutionBook
+from .boards import Board, RegularBoard, PyramidBoard
+from .puzzle import Setup, State, Puzzle, PuzzleBook
+from .solutions import Solution, SolutionBook
+from .game import Game
+from .source import Source
 
 __all__ = [
     "Lattice",
     "Block",
     "BlockCollection",
     "Board",
-    "FlatBoard",
+    "RegularBoard",
     "PyramidBoard",
-    "PuzzleSetup",
+    "Setup",
+    "State",
     "Game",
     "Puzzle",
     "PuzzleBook",
-    "SolvedPuzzle",
+    "Solution",
     "SolutionBook",
+    "Source"
 ]

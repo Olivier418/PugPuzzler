@@ -3,7 +3,7 @@
   "seed": 6,
   "puzzles": [
     {
-      "name": "empty",
+      "name": "main_empty",
       "difficulty": null,
       "puzzle": [
         [
@@ -72,7 +72,7 @@
           " "
         ]
       ],
-      "duration": 9.99998670000059,
+      "duration": 30.014659599997685,
       "results": []
     }
   ]

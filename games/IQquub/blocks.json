@@ -1,0 +1,105 @@
+{
+  "LIGHTGREEN": {
+    "letter": "A",
+    "rgb": [176, 204, 8],
+    "positions": [
+      [1, 1, 1, 1],
+      [0, 1, 0, 0],
+      [1, 1, 0, 0]
+    ],
+    "terminal": {"bg": "LIGHTGREEN_EX", "fg": "BLACK"}
+  },
+  "PINK": {
+    "letter": "B",
+    "rgb": [235, 81, 153],
+    "positions": [
+      [0, 1, 0, 0],
+      [1, 1, 1, 1],
+      [0, 1, 0, 1]
+    ],
+    "terminal": {"bg": "LIGHTMAGENTA_EX", "fg": "WHITE", "style": "DIM"}
+  },
+  "RED": {
+    "letter": "C",
+    "rgb": [228, 6, 19],
+    "positions": [
+      [0, 1, 0, 1],
+      [1, 1, 1, 1]
+    ],
+    "terminal": {"bg": "RED", "fg": "WHITE"}
+  },
+  "LIGHTBLUE": {
+    "letter": "D",
+    "rgb": [120, 204, 230],
+    "positions": [
+      [1, 1, 1],
+      [0, 1, 0],
+      [1, 1, 1]
+    ],
+    "terminal": {"bg": "CYAN", "fg": "BLACK"}
+  },
+  "ORANGE": {
+    "letter": "E",
+    "rgb": [245, 156, 0],
+    "positions": [
+      [0, 1, 0],
+      [0, 1, 1],
+      [0, 1, 0],
+      [1, 1, 0]
+    ],
+    "terminal": {"bg": "LIGHTRED_EX", "fg": "BLACK"}
+  },
+  "DARKGREEN": {
+    "letter": "F",
+    "rgb": [0, 150, 63],
+    "positions": [
+      [0, 1, 0],
+      [1, 1, 1],
+      [0, 1, 0],
+      [1, 1, 1]
+    ],
+    "terminal": {"bg": "GREEN", "fg": "BLACK"}
+  },
+  "PURPLE": {
+    "letter": "G",
+    "rgb": [167, 21, 128],
+    "positions": [
+      [0, 1],
+      [1, 1],
+      [0, 1],
+      [0, 1]
+    ],
+    "terminal": {"bg": "MAGENTA", "fg": "BLACK"}
+  },
+  "YELLOW": {
+    "letter": "H",
+    "rgb": [254, 237, 1],
+    "positions": [
+      [1, 1],
+      [0, 1],
+      [1, 1]
+    ],
+    "terminal": {"bg": "YELLOW", "fg": "BLACK"}
+  },
+  "DARKBLUE": {
+    "letter": "I",
+    "rgb": [1, 80, 159],
+    "positions": [
+      [1, 1, 0],
+      [0, 1, 0],
+      [1, 1, 1]
+    ],
+    "terminal": {"bg": "BLUE", "fg": "BLACK"}
+  },
+  "BLUE": {
+    "letter": "J",
+    "rgb": [0, 159, 227],
+    "positions": [
+      [0, 1, 0],
+      [1, 1, 0],
+      [0, 1, 0],
+      [1, 1, 1]
+    ],
+    "terminal": {"bg": "LIGHTBLUE_EX", "fg": "BLACK"}
+  }
+}

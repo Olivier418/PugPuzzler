@@ -16,16 +16,28 @@ class Board:
         self.shape = self.cells.shape
 
 
-class FlatBoard(Board):
-    def __init__(self, cells: np.ndarray = None, width: int = None, height: int = None):
+class RegularBoard(Board):
+    def __init__(
+        self,
+        cells: np.ndarray = None,
+        width: int = None,
+        depth: int = None,
+        height: int = None,
+    ):
         if cells is not None:
             cells = np.asarray(cells)
-        elif (width is not None) and (height is not None):
-            cells = np.ones((width, height), dtype=bool)
+            if cells.ndim not in (2, 3):
+                raise ValueError(f"cells must be 2D or 3D, got {cells.ndim}D.")
+        elif width is not None and depth is not None:
+            shape = (width, depth) if height is None else (width, depth, height)
+            cells = np.ones(shape, dtype=bool)
         else:
-            raise ValueError("Either cells or both width and height must be provided.")
-        # Plain rectangular lattice: neither axis is offset from the other.
-        offset_adjacency = np.zeros((2, 2), dtype=bool)
+            raise ValueError(
+                "Either 'cells' or both 'width' and 'depth' must be provided."
+            )
+
+        # Match offset_adjacency shape dynamically to the number of dimensions (2x2 or 3x3)
+        offset_adjacency = np.zeros((cells.ndim, cells.ndim), dtype=bool)
         super().__init__(cells, offset_adjacency)
 
 
