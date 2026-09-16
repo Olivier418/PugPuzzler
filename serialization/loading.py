@@ -41,7 +41,7 @@ def load_boards(json_path: Path | str) -> dict[str, Board]:
 
 def _cells_from_json(raw_cells: list) -> np.ndarray:
     """Convert a boards.json 'cells' field into this codebase's internal
-    cells.shape == (width, depth) convention (see Setup.print_to_terminal,
+    cells.shape == (width, depth) convention (see classes.rendering.grid_lines,
     which unpacks width, depth = shape[0], shape[1]).
 
     'cells' is authored the same human-readable way as a Puzzle letter

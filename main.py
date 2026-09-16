@@ -17,19 +17,23 @@ if __name__=="__main__":
 
     IQpuzzler = load_game("games/IQpuzzler")
     # test_pyramid = IQpuzzler.books['pyramid_puzzles']['101']
+    print(IQpuzzler.books['main_puzzles']['66'])
+    # solutions = load_solutionbook('solutions\\IQpuzzler\\books\\main_puzzles_solutions_1.json')
+    # print(solutions)
 
-    solutions = SolutionBook.from_puzzlebook(IQpuzzler.books['main_puzzles'],disp=True)
-    solutions = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
 
-    IQpuzzlerPRO = load_game("games/IQpuzzlerPRO")
-    solutions = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
+    # solutions = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
+
+    # IQpuzzlerPRO = load_game("games/IQpuzzlerPRO")
+    # solutions = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
 
     IQquub = load_game("games/IQquub")
+    print(IQquub.puzzles['120'])
     solutions = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
-
+    print(solutions)
     # solutions = load_solution('solutions\\IQquub\\puzzles\\120_solutions_1.json')
     # for solution in solutions.to_states():
-    #     solution.print_to_terminal()
+    #     print(solution)
 
     # start = time.perf_counter()
     # list(test_pyramid.solve(disp=True))

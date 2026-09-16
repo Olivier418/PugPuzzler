@@ -31,3 +31,8 @@ class Game:
         self.blocks: BlockCollection = (
             _shared(all_items, lambda x: x.blocks, "BlockCollection") if all_items else None
         )
+
+    def __repr__(self) -> str:
+        header = f"Game {self.name}" if self.name else "Game"
+        parts = [repr(b) for b in self.books.values()] + [repr(p) for p in self.puzzles.values()]
+        return f"{header}\n\n" + "\n\n".join(parts) if parts else header

@@ -3,7 +3,6 @@ from collections import UserDict
 import itertools
 
 import numpy as np
-from colorama import Style
 
 from constants import EMPTY, OUTSIDE_BOARD, UNPLACED
 from Solver import Solver
@@ -11,6 +10,7 @@ from Solver import Solver
 from ._utils import _assert_unique, _shared
 from .blocks import Block, BlockCollection
 from .boards import Board
+from .rendering import render as _render
 
 
 class Setup:
@@ -111,66 +111,16 @@ class Setup:
             if len(placements) == 0:
                 raise ValueError(f"Block {idx} has no valid placements on the board.")
 
-    def print_to_terminal(self, grid: np.ndarray, print_letters: bool = True):
-        """Render any grid shaped like this setup's board -- a Game's own
-        grid, a solved grid from Solver, or otherwise. This only depends
-        on board/blocks, both owned by the setup, not on any particular
-        Game's mutable state, so it lives here rather than on Game.
+    def render(self, grid: np.ndarray, header: str = None, leftover_idcs=None, print_letters: bool = True) -> str:
+        """Build the text representation used by every __repr__ in this
+        module: an optional header, then the board, and -- when
+        `leftover_idcs` is given -- shape diagrams of those blocks laid
+        out underneath the board. The actual rendering lives in
+        `classes.rendering` (a display concern, not part of this class's
+        board/blocks/placements model); this is a thin facade so callers
+        can keep saying `setup.render(...)`.
         """
-        # Unpack (width, depth, height)
-        shape = self.board.cells.shape
-        width, depth, height = (shape[0], shape[1], 1) if len(shape) == 2 else shape
-        reshaped_grid = grid.reshape(width, depth, height)
-
-        layer_strings = []
-
-        # Iterate over height (3rd axis / index 2)
-        for h in range(height):
-            layer = reshaped_grid[:, :, h]  # (width, depth) horizontal slice
-            padded = np.pad(layer, pad_width=2, constant_values=OUTSIDE_BOARD)
-            lines = []
-
-            if height > 1:
-                visual_width = (width + 2) * 2
-                lines.append(f"layer {h}".ljust(visual_width))
-
-            # Iterate over depth rows (r) and width cols (c)
-            for r in range(1, depth + 3):
-                row_chars = []
-                for c in range(1, width + 3):
-                    cell = padded[c, r]
-
-                    if cell == EMPTY:
-                        row_chars.append('  ')
-                    elif cell >= 0:
-                        txt = f"{self.blocks[cell].letter} " if print_letters else "  "
-                        row_chars.append(f"{self.blocks[cell].terminal_color}{txt}{Style.RESET_ALL}")
-                    else:  # cell == OUTSIDE_BOARD
-                        n, s = padded[c, r-1] != OUTSIDE_BOARD, padded[c, r+1] != OUTSIDE_BOARD
-                        w, e = padded[c-1, r] != OUTSIDE_BOARD, padded[c+1, r] != OUTSIDE_BOARD
-                        nw, ne = padded[c-1, r-1] != OUTSIDE_BOARD, padded[c+1, r-1] != OUTSIDE_BOARD
-                        sw, se = padded[c-1, r+1] != OUTSIDE_BOARD, padded[c+1, r+1] != OUTSIDE_BOARD
-
-                        if n and w:   char = '┏━'
-                        elif n and e: char = '━┓'
-                        elif s and w: char = '┗━'
-                        elif s and e: char = '━┛'
-                        elif n or s:  char = '━━'
-                        elif w:       char = '┃ '
-                        elif e:       char = ' ┃'
-                        elif nw:      char = '┛ '
-                        elif ne:      char = ' ┗'
-                        elif sw:      char = '┓ '
-                        elif se:      char = ' ┏'
-                        else:         char = '  '
-
-                        row_chars.append(char)
-
-                lines.append("".join(row_chars))
-            layer_strings.append(lines)
-
-        for row_tuple in zip(*layer_strings):
-            print('  '.join(row_tuple))
+        return _render(self.board, self.blocks, grid, header=header, leftover_idcs=leftover_idcs, print_letters=print_letters)
 
 
 class State:
@@ -267,11 +217,26 @@ class State:
                 sol.name = f"{self.name} (solution {sol_idx + 1})"
             if disp:
                 print(f"Solution {sol_idx + 1}:")
-                sol.print_to_terminal()
+                print(sol)
             yield sol
 
-    def print_to_terminal(self, print_letters: bool = True):
-        self.setup.print_to_terminal(self.grid, print_letters)
+    def _print_header(self) -> str:
+        name = getattr(self, "name", None)
+        return f"State {name}" if name else "State"
+
+    def render(self, show_leftover: bool = True) -> str:
+        """Text representation used by __repr__: header + grid, plus
+        shape diagrams of any still-unplaced blocks underneath it.
+        `show_leftover=False` is used by PuzzleBook/Game when printing
+        every puzzle in a book, where the per-puzzle legend is just
+        noise."""
+        leftover = None
+        if show_leftover:
+            leftover = [idx for idx, p in self.chosen_placement_idx.items() if p == UNPLACED]
+        return self.setup.render(self.grid, header=self._print_header(), leftover_idcs=leftover)
+
+    def __repr__(self) -> str:
+        return self.render()
 
 
 class Puzzle(State):
@@ -283,7 +248,7 @@ class Puzzle(State):
             self._initialize_grid(letter_grid, empty)
 
     def _initialize_grid(self, letter_grid: np.ndarray, empty: str) -> None:
-        # Internal convention (see Setup.print_to_terminal): grids are
+        # Internal convention (see classes.rendering.grid_lines): grids are
         # shaped (width, depth). letter_grid, like boards.json's "cells",
         # is authored the human-readable way -- one row per depth
         # position, `width` entries per row, i.e. (depth, width) as
@@ -333,6 +298,9 @@ class Puzzle(State):
             # know it's fixed rather than free to place.
             self.chosen_placement_idx[idx] = int(matching_rows[0])
 
+    def _print_header(self) -> str:
+        return f"Puzzle {self.name}"
+
 
 class PuzzleBook(UserDict):
     def __init__(self, *puzzles, name: str = None):
@@ -357,3 +325,8 @@ class PuzzleBook(UserDict):
     @property
     def blocks(self) -> BlockCollection:
         return self.setup.blocks
+
+    def __repr__(self) -> str:
+        header = f"Puzzle Book {self.name}" if self.name else "Puzzle Book"
+        body = "\n\n".join(p.render(show_leftover=False) for p in self.values())
+        return f"{header}\n\n{body}" if body else header

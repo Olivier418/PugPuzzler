@@ -173,6 +173,16 @@ class Solution:
             games_root=games_root,
         )
 
+    def __repr__(self) -> str:
+        states = self.to_states()
+        if not states:
+            return f"Solution to puzzle {self.puzzle_name} (no results)"
+        parts = [
+            state.setup.render(state.grid, header=f"Solution {i} to puzzle {self.puzzle_name}")
+            for i, state in enumerate(states, start=1)
+        ]
+        return "\n\n".join(parts)
+
 
 class SolutionBook(UserDict):
     """Container for batch solution results."""
@@ -245,3 +255,8 @@ class SolutionBook(UserDict):
             save_solutions(result, target)
 
         return result
+
+    def __repr__(self) -> str:
+        header = f"Solution Book {self.name}" if self.name else "Solution Book"
+        body = "\n\n".join(repr(sol) for sol in self.values())
+        return f"{header}\n\n{body}" if body else header
