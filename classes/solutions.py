@@ -4,7 +4,7 @@ import time
 from typing import NamedTuple
 import numpy as np
 
-from constants import EMPTY
+from constants import EMPTY, SOLUTION_DIR, GAMES_DIR
 from ._utils import _next_free_idx_dir
 from .puzzle import State
 from .source import Source
@@ -77,7 +77,7 @@ class Solution:
         disp: bool = False,
         save: bool = True,
         path: str | Path = None,
-        solutions_root: str | Path = "solutions",
+        solutions_root: str | Path = SOLUTION_DIR,
     ) -> tuple["Solution", SolveStats]:
         """Solve a single Puzzle and, by default, save the results and
         the run's SolveStats to a folder mirroring where the Puzzle
@@ -122,7 +122,7 @@ class Solution:
 
         return solution, stats
 
-    def to_states(self, setup=None, games_root: str | Path = "games") -> list[State]:
+    def to_states(self, setup=None, games_root: str | Path = GAMES_DIR) -> list[State]:
         """Hydrate result grids into executable State objects.
 
         Uses the live `setup` reference when there is one (set on any
@@ -150,7 +150,7 @@ class Solution:
             states.append(state)
         return states
 
-    def puzzle_info(self, puzzles=None, games_root: str | Path = "games"):
+    def puzzle_info(self, puzzles=None, games_root: str | Path = GAMES_DIR):
         """Look up this solution's originating Puzzle's difficulty and
         empty-cell count. `difficulty`/`nr_empty_spaces` aren't stored on
         Solution itself -- they're facts about the Puzzle, not the
@@ -228,7 +228,7 @@ class SolutionBook(UserDict):
         disp: bool = False,
         save: bool = True,
         path: str | Path = None,
-        solutions_root: str | Path = "solutions",
+        solutions_root: str | Path = SOLUTION_DIR,
     ) -> tuple["SolutionBook", "SolveStatsBook"]:
         """Solve every puzzle in a PuzzleBook and, by default, save the
         combined solutions and solve stats to a folder mirroring where

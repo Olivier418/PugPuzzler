@@ -2,16 +2,16 @@ from collections import Counter
 from pathlib import Path
 
 
-def _next_free_idx_dir(base: Path) -> Path:
-    """base/result_1, base/result_2, ... -- the next not-yet-existing
+def _next_free_idx_dir(base: Path, prefix: str = "result") -> Path:
+    """base/{prefix}_1, base/{prefix}_2, ... -- the next not-yet-existing
     per-run subfolder under base. Shared by every place that auto-saves
     a run (solutions, solve stats, benchmarks) so re-running the same
     puzzle/book always gets its own folder instead of overwriting the
     last one."""
     idx = 1
-    while (base / f"result_{idx}").exists():
+    while (base / f"{prefix}_{idx}").exists():
         idx += 1
-    return base / f"result_{idx}"
+    return base / f"{prefix}_{idx}"
 
 
 def _assert_unique(items, key_fn, label: str) -> None:

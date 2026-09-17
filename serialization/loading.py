@@ -7,6 +7,7 @@ from colorama import Back, Fore, Style
 from classes import Setup, Game, Puzzle, PuzzleBook, Block, BlockCollection, Board, RegularBoard, PyramidBoard
 from classes.source import Source
 from classes.solutions import PuzzleInfo
+from constants import GAMES_DIR
 
 
 def load_blocks(json_path: Path | str) -> BlockCollection:
@@ -175,7 +176,7 @@ def load_setup_for_puzzle(
     game_name: str,
     book_name: str = None,
     puzzle_name: str = None,
-    games_root: str | Path = "games",
+    games_root: str | Path = GAMES_DIR,
 ) -> Setup:
     """Builds Setup on-demand from canonical game/book/puzzle IDs.
 
@@ -211,7 +212,7 @@ def load_puzzle_info_for_puzzle(
     game_name: str,
     puzzle_name: str,
     book_name: str = None,
-    games_root: str | Path = "games",
+    games_root: str | Path = GAMES_DIR,
 ) -> PuzzleInfo:
     """Reads a puzzle's difficulty and empty-cell count straight off its
     JSON entry, without building a Setup or Puzzle.

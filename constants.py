@@ -16,3 +16,7 @@ MODE_COLORS = {
     1: "#FFDD87",
     2: "#F76773"
 }
+
+SOLUTION_DIR = "solutions"
+BENCHMARK_DIR = "benchmarks"
+GAMES_DIR = "games"

@@ -16,22 +16,27 @@ from SolverV2 import SolverV2
 if __name__=="__main__":
 
     IQpuzzler = load_game("games/IQpuzzler")
-    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
+    # solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
 
-    IQpuzzlerPRO = load_game("games/IQpuzzlerPRO")
-    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
+    # IQpuzzlerPRO = load_game("games/IQpuzzlerPRO")
+    # solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
 
-    IQquub = load_game("games/IQquub")
-    solution, stats = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
-    
+    # IQquub = load_game("games/IQquub")
+    # solution, stats = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
+    EMPTY = IQpuzzler.puzzles['empty_main']
+
+    stats_books, path = run_benchmark(EMPTY, nr_tests = 2)
+    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\20260917_131737')
+    plot_benchmark(stats_books)
+    plt.show()
 
 
-    solution_folder = "solutions\\IQpuzzlerPRO\\books\\main_puzzles\\result_1"
-    solution_book, stats_book = load_solution_run(solution_folder)
+    # solution_folder = "solutions\\IQpuzzlerPRO\\books\\main_puzzles\\result_1"
+    # solution_book, stats_book = load_solution_run(solution_folder)
 
-    plot_difficulty_space(solution_book)
-    plot_solve_timeline(solution_book, stats_book)
-    plt.show()  
+    # plot_difficulty_space(solution_book)
+    # plot_solve_timeline(solution_book, stats_book)
+    # plt.show()  
 
 
 

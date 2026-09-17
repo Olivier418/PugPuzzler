@@ -1,6 +1,5 @@
 import time
 import multiprocessing
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -8,9 +7,10 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from classes import Puzzle, SolutionBook, Solution
+from classes._utils import _next_free_idx_dir
 from classes.solutions import SolveStats, SolveStatsBook
 from serialization import save_solution_run, load_solution_run
-from constants import MODE_COLORS
+from constants import MODE_COLORS, BENCHMARK_DIR
 
 name_dct = {0: "no pruning / branching", 1: "pruning", 2: "branching"}
 
@@ -22,18 +22,19 @@ def _worker(puzzle: Puzzle, mode: int, seed: int, conn):
 
     Deliberately does NOT time itself or check against T: spawning a
     subprocess (reimporting numpy/matplotlib/etc. in the fresh
-    interpreter) takes real time, so a clock started on the first line
-    here already lags the parent's clock by however long that spawn took.
-    Enforcing T against this lagging clock would silently cut every run
-    short by the spawn delay -- exactly the "data stops before T" bug.
-    The parent owns T and stamps arrival time itself instead; this just
-    streams solutions as they're found, and gets hard-killed by the
-    parent once T is actually up.
+    interpreter, and unpickling `puzzle`) takes real time that has
+    nothing to do with the solver. The parent owns T and stamps arrival
+    time itself instead; this just sends a "ready" handshake once that
+    startup cost is already behind it (i.e. once this line actually
+    starts running), so the parent knows exactly when to start its
+    clock, then streams solutions as they're found, and gets
+    hard-killed by the parent once T is actually up.
 
     Sends back only the raw grid per solution -- the parent pairs each
     with its own arrival-time stamp to build the SolveStats.
     """
     try:
+        conn.send(("ready", None))
         for sol in puzzle.solve(disp=False, mode=mode, seed=seed):
             conn.send(("solution", sol.grid))
         conn.send(("done", None))
@@ -59,35 +60,58 @@ def _run_single_test(puzzle: Puzzle, mode: int, seed: int, T: float) -> tuple[So
 
     p.start()
     child_conn.close()
-    # The single authoritative clock: both the T deadline below and every
-    # solution's elapsed time are measured against this, so they can't
-    # drift apart the way the parent/worker clocks did before.
-    start_wait = time.perf_counter()
 
-    while True:
-        if not p.is_alive() and not parent_conn.poll():
-            break
-
-        rem_time = T - (time.perf_counter() - start_wait)
-        if rem_time <= 0:
-            break
-
-        if not parent_conn.poll(rem_time):
-            break
-
+    # Block until the worker's "ready" handshake, i.e. until subprocess
+    # spawn + module reimport + unpickling `puzzle` is behind it -- only
+    # then does the clock start, so that startup cost (the ~1s of
+    # apparent "dead time" before the first solution) isn't mistaken for
+    # search time. Capped generously (well beyond T) so a worker that
+    # dies before ever sending anything can't hang the benchmark.
+    SETUP_TIMEOUT = max(T, 5.0) + 30.0
+    setup_error = None
+    if parent_conn.poll(SETUP_TIMEOUT):
         try:
             status, payload = parent_conn.recv()
+            if status != "ready":
+                setup_error = payload if status == "error" else f"unexpected message {status!r} before ready"
         except EOFError:
-            break
+            setup_error = "worker closed its connection before becoming ready"
+    else:
+        setup_error = f"worker did not become ready within {SETUP_TIMEOUT}s"
 
-        if status == "solution":
-            grids.append(payload)
-            elapsed.append(time.perf_counter() - start_wait)
-        elif status == "done":
-            break
-        elif status == "error":
-            print(f"\nWorker error in mode {mode}, seed {seed}: {payload}")
-            break
+    # The single authoritative clock, started only once the worker is
+    # actually ready: both the T deadline below and every solution's
+    # elapsed time are measured against this, so they can't drift apart
+    # the way the parent/worker clocks did before.
+    start_wait = time.perf_counter()
+
+    if setup_error is not None:
+        print(f"\nWorker error in mode {mode}, seed {seed}: {setup_error}")
+    else:
+        while True:
+            if not p.is_alive() and not parent_conn.poll():
+                break
+
+            rem_time = T - (time.perf_counter() - start_wait)
+            if rem_time <= 0:
+                break
+
+            if not parent_conn.poll(rem_time):
+                break
+
+            try:
+                status, payload = parent_conn.recv()
+            except EOFError:
+                break
+
+            if status == "solution":
+                grids.append(payload)
+                elapsed.append(time.perf_counter() - start_wait)
+            elif status == "done":
+                break
+            elif status == "error":
+                print(f"\nWorker error in mode {mode}, seed {seed}: {payload}")
+                break
 
     duration = time.perf_counter() - start_wait
 
@@ -121,14 +145,14 @@ def run_benchmark(
     modes: list[int] = [0, 1, 2],
     nr_tests: int = 10,
     T: float = 5.0,
-    base_folder: str | Path = "benchmarks",
+    base_folder: str | Path = BENCHMARK_DIR,
 ) -> tuple[dict[int, list[SolveStatsBook]], Path]:
     """Run nr_tests trials (seeds 0..nr_tests-1) of each mode on puzzle,
     each capped at T seconds. Every trial is saved as its own
     solutions.json + stats.json pair under
-    base_folder/<game>/<books|puzzles>/<puzzle-or-book_puzzle>/<timestamp>/
+    base_folder/<game>/<books|puzzles>/<puzzle-or-book_puzzle>/benchmark_<idx>/
     -- mirroring where the puzzle itself lives under games/, same as
-    solutions/ does -- with one timestamped folder per call, so
+    solutions/ does -- with one benchmark_<idx> folder per call, so
     re-running the same puzzle never overwrites an earlier run and you
     can tell separate simulations apart at a glance.
 
@@ -139,8 +163,7 @@ def run_benchmark(
     """
     source = puzzle.source
     puzzle_dir = Path(base_folder) / source.relative_dir() if source else Path(base_folder) / puzzle.name
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    puzzle_folder = puzzle_dir / timestamp
+    puzzle_folder = _next_free_idx_dir(puzzle_dir, prefix="benchmark")
 
     stats_books: dict[int, list[SolveStatsBook]] = {mode: [] for mode in modes}
     total_tasks = len(modes) * nr_tests
