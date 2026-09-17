@@ -1,5 +1,4 @@
 {
-    "name": "90",
     "board": "main",
     "difficulty": "wizard",
     "grid": [   [" ", " ", " ", " ", " ", " ", "H", " ", "H", " ", " ", " ", " "],

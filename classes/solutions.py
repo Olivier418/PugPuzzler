@@ -5,13 +5,9 @@ from typing import NamedTuple
 import numpy as np
 
 from constants import EMPTY
+from ._utils import _next_free_idx_dir
 from .puzzle import State
 from .source import Source
-
-
-class Result(NamedTuple):
-    grid: np.ndarray
-    elapsed: float
 
 
 class PuzzleInfo(NamedTuple):
@@ -19,50 +15,58 @@ class PuzzleInfo(NamedTuple):
     nr_empty_spaces: int
 
 
-def _next_solutions_path(source: Source | None, solutions_root: str | Path) -> Path:
-    """Where to auto-save a Solution/SolutionBook: mirrors `source`'s
-    game/puzzle-or-book directory under `solutions_root` (no extra
-    per-run subfolder, so the tree stays symmetric with games/), using
-    the next free '{stem}_solutions_{idx}.json' name so repeated solves
-    of the same puzzle/book accumulate instead of overwriting each other."""
+class SolveStats(NamedTuple):
+    """Metadata about the solver run that produced a Solution -- kept
+    separate from Solution itself since the solver is exhaustive: the
+    solutions are deterministic, but how long it took / what mode+seed
+    were used is a property of the run, not of the solutions."""
+    puzzle_name: str
+    mode: int
+    seed: int | None
+    duration: float
+    elapsed: list[float]  # per-solution elapsed time, same order/index as the matching Solution.grids
+
+
+def _next_run_dir(source: Source | None, solutions_root: str | Path) -> Path:
+    """Where to auto-save a Solution/SolutionBook + its SolveStats:
+    mirrors `source`'s game/puzzle-or-book directory under
+    `solutions_root`, then a per-run subfolder named with the next free
+    index -- re-solving the same puzzle/book is expected to reproduce
+    the same solutions, but repeated runs (e.g. while chasing a solver
+    bug) still each get their own folder instead of overwriting."""
     if source is None:
         raise ValueError(
             "Can't auto-save: no `source` on this Puzzle/PuzzleBook (it "
             "wasn't loaded via serialization.load_game). Pass `path=` "
             "explicitly, or `save=False` to skip saving."
         )
-    directory = Path(solutions_root) / source.relative_dir()
-    idx = 1
-    while (directory / f"{source.stem}_solutions_{idx}.json").exists():
-        idx += 1
-    return directory / f"{source.stem}_solutions_{idx}.json"
+    base = Path(solutions_root) / source.relative_dir()
+    return _next_free_idx_dir(base)
 
 
 class Solution:
     """Lean output container referencing a puzzle by ID, plus -- when it
     was produced in this session rather than loaded back from disk -- a
-    live reference to the Setup it was solved against, so to_states()
-    doesn't need to reload anything from disk."""
+    live reference to the Puzzle it was solved from, so to_states() and
+    puzzle_info() don't need to reload anything from disk."""
 
     def __init__(
         self,
         puzzle_name: str,
-        results: list[Result],
-        duration: float,
+        grids: list[np.ndarray],
         game_name: str = None,
         book_name: str = None,
-        mode: int = 2,
-        seed: int = None,
-        setup=None,
+        puzzle=None,
     ):
         self.puzzle_name = puzzle_name
-        self.results = results
-        self.duration = duration
+        self.grids = grids
         self.game_name = game_name
         self.book_name = book_name
-        self.mode = mode
-        self.seed = seed
-        self.setup = setup  # live reference only; never written to disk
+        self.puzzle = puzzle  # live reference only; never written to disk
+
+    @property
+    def setup(self):
+        return self.puzzle.setup if self.puzzle is not None else None
 
     @classmethod
     def from_puzzle(
@@ -74,47 +78,49 @@ class Solution:
         save: bool = True,
         path: str | Path = None,
         solutions_root: str | Path = "solutions",
-    ) -> "Solution":
-        """Solve a single Puzzle and, by default, save the result to a
-        folder mirroring where the Puzzle itself was loaded from, under
-        `solutions_root` (e.g. games/IQpuzzler/puzzles/main_empty ->
-        solutions/IQpuzzler/puzzles/main_empty/<timestamp>/solutions.json).
+    ) -> tuple["Solution", SolveStats]:
+        """Solve a single Puzzle and, by default, save the results and
+        the run's SolveStats to a folder mirroring where the Puzzle
+        itself was loaded from, under `solutions_root` (e.g.
+        games/IQpuzzler/puzzles/main_empty ->
+        solutions/IQpuzzler/puzzles/main_empty/<idx>/{solutions,stats}.json).
 
         Pass `save=False` to just solve, or `path=` to save somewhere
         specific instead of the mirrored default.
         """
         start = time.perf_counter()
-        results = [
-            Result(state.grid.copy(), time.perf_counter() - start)
-            for state in puzzle.solve(mode=mode, seed=seed, disp=disp)
-        ]
+        grids = []
+        elapsed = []
+        for state in puzzle.solve(mode=mode, seed=seed, disp=disp):
+            grids.append(state.grid.copy())
+            elapsed.append(time.perf_counter() - start)
         duration = time.perf_counter() - start
 
         source = puzzle.source
         solution = cls(
             puzzle_name=puzzle.name,
-            results=results,
-            duration=duration,
+            grids=grids,
             game_name=source.game_name if source else None,
             book_name=source.book_name if source else None,
+            puzzle=puzzle,
+        )
+        stats = SolveStats(
+            puzzle_name=puzzle.name,
             mode=mode,
             seed=seed,
-            setup=puzzle.setup,
+            duration=duration,
+            elapsed=elapsed,
         )
 
         if save:
-            from serialization import save_solutions  # lazy: avoids a classes<->serialization import cycle
+            from serialization import save_solution_run  # lazy: avoids a classes<->serialization import cycle
 
-            target = Path(path) if path is not None else _next_solutions_path(source, solutions_root)
-            book = SolutionBook(
-                solution,
-                game_name=solution.game_name,
-                book_name=solution.book_name,
-                name=puzzle.name,
-            )
-            save_solutions(book, target)
+            target = Path(path) if path is not None else _next_run_dir(source, solutions_root)
+            solution_book = SolutionBook(solution, game_name=solution.game_name, book_name=solution.book_name)
+            stats_book = SolveStatsBook(stats, game_name=solution.game_name, book_name=solution.book_name, mode=mode, seed=seed)
+            save_solution_run(solution_book, stats_book, target)
 
-        return solution
+        return solution, stats
 
     def to_states(self, setup=None, games_root: str | Path = "games") -> list[State]:
         """Hydrate result grids into executable State objects.
@@ -138,9 +144,9 @@ class Solution:
             )
 
         states = []
-        for res in self.results:
+        for grid in self.grids:
             state = State(setup)
-            state.grid = res.grid.copy()
+            state.grid = grid.copy()
             states.append(state)
         return states
 
@@ -152,13 +158,18 @@ class Solution:
         the source of truth -- so this resolves them on demand instead,
         same spirit as to_states() resolving a Setup on demand.
 
-        Pass `puzzles` (a PuzzleBook, or any puzzle_name -> Puzzle
-        mapping) when one is already in memory, e.g. right after
-        SolutionBook.from_puzzlebook(book) -- pass `book` itself. With no
-        `puzzles`, falls back to reading the puzzle's JSON directly via
+        Uses the live `puzzle` reference when there is one (set by
+        from_puzzle/from_puzzlebook in this session). Otherwise, pass
+        `puzzles` (a PuzzleBook, or any puzzle_name -> Puzzle mapping)
+        when one is in memory -- e.g. a freshly `load_game`'d book
+        matching a Solution reloaded from a bare solutions.json. With
+        neither, falls back to reading the puzzle's JSON directly via
         the canonical game/book/puzzle IDs; unlike to_states()'s Setup
         fallback, this never needs the expensive placement computation.
         """
+        if self.puzzle is not None:
+            return PuzzleInfo(self.puzzle.difficulty, int((self.puzzle.grid == EMPTY).sum()))
+
         if puzzles is not None:
             puzzle = puzzles[self.puzzle_name]
             return PuzzleInfo(puzzle.difficulty, int((puzzle.grid == EMPTY).sum()))
@@ -191,16 +202,21 @@ class SolutionBook(UserDict):
         *solutions: Solution,
         game_name: str = None,
         book_name: str = None,
-        mode: int = 2,
-        seed: int = None,
-        name: str = None,
     ):
         self.game_name = game_name
         self.book_name = book_name
-        self.mode = mode
-        self.seed = seed
-        self.name = name or book_name
         super().__init__({sol.puzzle_name: sol for sol in solutions})
+
+    @property
+    def name(self) -> str | None:
+        """Display/folder name: the book's own name, or -- for a book-less
+        SolutionBook wrapping a single puzzle's solutions -- that puzzle's
+        name. Never stored separately, so it can't drift from book_name."""
+        if self.book_name:
+            return self.book_name
+        if len(self) == 1:
+            return next(iter(self))
+        return None
 
     @classmethod
     def from_puzzlebook(
@@ -210,14 +226,14 @@ class SolutionBook(UserDict):
         mode: int = 2,
         seed: int = None,
         disp: bool = False,
-        name: str = None,
         save: bool = True,
         path: str | Path = None,
         solutions_root: str | Path = "solutions",
-    ) -> "SolutionBook":
+    ) -> tuple["SolutionBook", "SolveStatsBook"]:
         """Solve every puzzle in a PuzzleBook and, by default, save the
-        combined result to a folder mirroring where the book itself was
-        loaded from (see Solution.from_puzzle for the mirroring rule).
+        combined solutions and solve stats to a folder mirroring where
+        the book itself was loaded from (see Solution.from_puzzle for
+        the mirroring rule).
 
         Delegates per-puzzle solving to Solution.from_puzzle so the two
         entry points can't drift apart; only the batching and the single
@@ -227,36 +243,78 @@ class SolutionBook(UserDict):
         book_name = puzzlebook.name
         game_name = game_name or (source.game_name if source else None)
         solutions = []
+        stats_list = []
 
         for puzzle in puzzlebook.values():
-            solution = Solution.from_puzzle(puzzle, mode=mode, seed=seed, save=False)
+            solution, stats = Solution.from_puzzle(puzzle, mode=mode, seed=seed, save=False)
             # Individual puzzles carry their own Source, but this
             # SolutionBook is filed under the book's own game/book name --
             # keep every Solution in it consistent with that.
             solution.game_name = game_name
             solution.book_name = book_name
             solutions.append(solution)
+            stats_list.append(stats)
             if disp:
-                print(f"Found {len(solution.results)} solutions for puzzle '{puzzle.name}'")
+                print(f"Found {len(solution.grids)} solutions for puzzle '{puzzle.name}'")
 
         result = cls(
             *solutions,
             game_name=game_name,
             book_name=book_name,
+        )
+        stats_book = SolveStatsBook(
+            *stats_list,
+            game_name=game_name,
+            book_name=book_name,
             mode=mode,
             seed=seed,
-            name=name,
         )
 
         if save:
-            from serialization import save_solutions  # lazy: avoids a classes<->serialization import cycle
+            from serialization import save_solution_run  # lazy: avoids a classes<->serialization import cycle
 
-            target = Path(path) if path is not None else _next_solutions_path(source, solutions_root)
-            save_solutions(result, target)
+            target = Path(path) if path is not None else _next_run_dir(source, solutions_root)
+            save_solution_run(result, stats_book, target, flat=False)
 
-        return result
+        return result, stats_book
 
     def __repr__(self) -> str:
         header = f"Solution Book {self.name}" if self.name else "Solution Book"
         body = "\n\n".join(repr(sol) for sol in self.values())
         return f"{header}\n\n{body}" if body else header
+
+
+class SolveStatsBook(UserDict):
+    """Container for batch solve stats, mirroring SolutionBook's shape."""
+    def __init__(
+        self,
+        *stats: SolveStats,
+        game_name: str = None,
+        book_name: str = None,
+        mode: int = 2,
+        seed: int = None,
+    ):
+        self.game_name = game_name
+        self.book_name = book_name
+        self.mode = mode
+        self.seed = seed
+        super().__init__({s.puzzle_name: s for s in stats})
+
+    @property
+    def name(self) -> str | None:
+        """Same rule as SolutionBook.name."""
+        if self.book_name:
+            return self.book_name
+        if len(self) == 1:
+            return next(iter(self))
+        return None
+
+    def __repr__(self) -> str:
+        header = f"Solve Stats {self.name}" if self.name else "Solve Stats"
+        lines = [
+            f"{s.puzzle_name}: mode={s.mode} seed={s.seed} duration={s.duration:.3f}s "
+            f"({len(s.elapsed)} solutions)"
+            for s in self.values()
+        ]
+        body = "\n".join(lines)
+        return f"{header}\n{body}" if body else header

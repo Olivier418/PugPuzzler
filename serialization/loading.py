@@ -112,7 +112,7 @@ def load_game(dir_path: Path | str) -> Game:
                 content = json.load(f)
 
             if isinstance(content, dict):
-                book_name = content.get("name", json_file.stem)
+                book_name = json_file.stem
                 board_key = content["board"]
                 puzzle_data = content["puzzles"]
             else:
@@ -152,7 +152,7 @@ def load_game(dir_path: Path | str) -> Game:
             board_key = item.get("board", "main")
             setup = setups[board_key]
             grid = np.array(item["grid"], dtype=str) if "grid" in item else None
-            name = item.get("name", json_file.stem)
+            name = json_file.stem
 
             puzzle = Puzzle(
                 setup,

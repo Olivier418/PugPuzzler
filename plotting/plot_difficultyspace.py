@@ -18,7 +18,7 @@ def plot_difficulty_space(solutions: SolutionBook, puzzles=None, ax: plt.Axes = 
 
     labels = [sol.puzzle_name for sol in sols]
     colors = [DIFFICULTY_COLORS[info.difficulty] for info in infos]
-    nr_solutions = [len(sol.results) for sol in sols]
+    nr_solutions = [len(sol.grids) for sol in sols]
     nr_empty_spaces = [info.nr_empty_spaces for info in infos]
 
     if ax is None:

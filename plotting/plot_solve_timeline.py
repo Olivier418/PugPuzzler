@@ -4,9 +4,10 @@ from matplotlib.patches import Rectangle
 from constants import DIFFICULTY_COLORS
 
 from classes import SolutionBook
+from classes.solutions import SolveStatsBook
 
 
-def plot_solve_timeline(solutions: SolutionBook, puzzles=None, ax: plt.Axes = None) -> plt.Axes:
+def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=None, ax: plt.Axes = None) -> plt.Axes:
     """Timeline plot: one column per puzzle, y = time (log scale). A thin
     gray horizontal line marks every solution found; the first solution
     for each puzzle is drawn thicker, in the puzzle's difficulty color.
@@ -14,10 +15,13 @@ def plot_solve_timeline(solutions: SolutionBook, puzzles=None, ax: plt.Axes = No
     are visually grouped into bands by difficulty with small gaps
     between groups. A faint, difficulty-colored rectangle behind each
     column's lines spans the full time the solver ran on that puzzle
-    (sp.duration) -- not just the window between its first and last
-    solution, since the solver may keep searching after the last
+    (stats[name].duration) -- not just the window between its first and
+    last solution, since the solver may keep searching after the last
     solution was already found.
 
+    Timing (duration/elapsed) comes from `stats`, the SolveStatsBook
+    produced alongside `solutions` by the same solve call -- it's
+    solver-run metadata, not part of the solutions themselves.
     difficulty is the source Puzzle's, not the Solution's own -- see
     Solution.puzzle_info. Pass `puzzles` (e.g. the PuzzleBook `solutions`
     was solved from) when one is in memory; otherwise each is resolved
@@ -53,15 +57,15 @@ def plot_solve_timeline(solutions: SolutionBook, puzzles=None, ax: plt.Axes = No
 
     # tiny epsilon so a solution found at elapsed == 0 is still visible
     # on a log-scaled y axis
-    all_times = [r.elapsed for sp in solved_puzzles for r in sp.results]
+    all_times = [t for sp in solved_puzzles for t in stats[sp.puzzle_name].elapsed]
     positive_times = [t for t in all_times if t > 0]
     eps = min(positive_times) / 10 if positive_times else 1e-3
 
     for sol, x in zip(solved_puzzles, x_positions):
         color = DIFFICULTY_COLORS[difficulty_by_name[sol.puzzle_name]]
-        times = sorted(max(r.elapsed, eps) for r in sol.results)
+        times = sorted(max(t, eps) for t in stats[sol.puzzle_name].elapsed)
 
-        duration = max(sol.duration, eps)
+        duration = max(stats[sol.puzzle_name].duration, eps)
         ax.add_patch(Rectangle(
             (x - col_width / 2, eps), col_width, duration - eps,
             facecolor=color, edgecolor="none", alpha=0.15, zorder=1,

@@ -3,7 +3,7 @@ import os
 from plotting.benchmark import load_benchmark, plot_benchmark, run_benchmark
 from classes import SolutionBook, Solution
 from plotting.plot_solve_timeline import plot_solve_timeline
-from serialization import save_solutions, load_solutionbook, load_solution, load_game
+from serialization import load_solutionbook, load_solution, load_solution_run, load_game
 
 from plotting.plot_difficultyspace import plot_difficulty_space
 import matplotlib.pyplot as plt
@@ -16,24 +16,24 @@ from SolverV2 import SolverV2
 if __name__=="__main__":
 
     IQpuzzler = load_game("games/IQpuzzler")
-    # test_pyramid = IQpuzzler.books['pyramid_puzzles']['101']
-    print(IQpuzzler.books['main_puzzles']['66'])
-    # solutions = load_solutionbook('solutions\\IQpuzzler\\books\\main_puzzles_solutions_1.json')
-    # print(solutions)
+    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
 
-
-    # solutions = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
-
-    # IQpuzzlerPRO = load_game("games/IQpuzzlerPRO")
-    # solutions = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
+    IQpuzzlerPRO = load_game("games/IQpuzzlerPRO")
+    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
 
     IQquub = load_game("games/IQquub")
-    print(IQquub.puzzles['120'])
-    solutions = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
-    print(solutions)
-    # solutions = load_solution('solutions\\IQquub\\puzzles\\120_solutions_1.json')
-    # for solution in solutions.to_states():
-    #     print(solution)
+    solution, stats = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
+    
+
+
+    solution_folder = "solutions\\IQpuzzlerPRO\\books\\main_puzzles\\result_1"
+    solution_book, stats_book = load_solution_run(solution_folder)
+
+    plot_difficulty_space(solution_book)
+    plot_solve_timeline(solution_book, stats_book)
+    plt.show()  
+
+
 
     # start = time.perf_counter()
     # list(test_pyramid.solve(disp=True))

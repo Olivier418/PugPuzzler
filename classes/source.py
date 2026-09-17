@@ -18,23 +18,19 @@ class Source:
     book_name: str | None = None   # set for puzzles/books loaded from books/
     puzzle_name: str | None = None   # set for a single puzzle (standalone, or one entry of a book)
 
-    @property
-    def stem(self) -> str:
-        """Base filename this source's solutions should be saved under.
-        A whole book -> its own name ('main'). A standalone puzzle -> its
-        own name ('main_empty'). One puzzle solved out of a book -> both,
-        so it's still unambiguous which book it came from ('main_somepuzzle')."""
-        if self.puzzle_name and self.book_name:
-            return f"{self.book_name}_{self.puzzle_name}"
-        return self.puzzle_name or self.book_name
-
     def relative_dir(self) -> Path:
-        """Directory, relative to some root, mirroring this source's
-        position inside its game -- e.g. 'IQpuzzler/books' or
-        'IQpuzzler/puzzles'. Mirrors where the *file* lives in games/
-        (games/IQpuzzler/puzzles/main_empty.json), not a per-puzzle
-        subfolder -- the filename (see `stem`) carries the specific name."""
-        return Path(self.game_name) / ("books" if self.book_name else "puzzles")
+        """Directory, relative to some root, uniquely identifying where
+        this source's own files/runs live -- mirrors its position inside
+        games/. A whole book -> 'IQpuzzler/books/main'. A standalone
+        puzzle -> 'IQpuzzler/puzzles/main_empty'. One puzzle solved out
+        of a book -> nested under its book rather than concatenated into
+        one name, so it stays unambiguous to split back apart:
+        'IQpuzzler/books/main/some_puzzle'."""
+        if self.book_name and self.puzzle_name:
+            return Path(self.game_name) / "books" / self.book_name / self.puzzle_name
+        if self.book_name:
+            return Path(self.game_name) / "books" / self.book_name
+        return Path(self.game_name) / "puzzles" / self.puzzle_name
 
     def for_puzzle(self, puzzle_name: str) -> "Source":
         """The Source for one puzzle inside a book this Source points at."""
