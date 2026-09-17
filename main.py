@@ -22,15 +22,22 @@ if __name__=="__main__":
 
     # IQquub = load_game("games/IQquub")
     # solution, stats = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
-    EMPTY = IQpuzzler.puzzles['empty_main']
+    
+    
+    
+    EMPTY_MAIN = IQpuzzler.puzzles['empty_main']
+    stats_books, _ = run_benchmark(EMPTY_MAIN, nr_tests = 10, modes = [0,1,2,3,4],T=120)
+    # plot_benchmark(stats_books),
+    # plt.show()
 
-    stats_books, _ = run_benchmark(EMPTY, nr_tests = 2)
-    plot_benchmark(stats_books)
-    plt.show()
+    
+    EMPTY_PYR = IQpuzzler.puzzles['empty_main']
+    stats_books, _ = run_benchmark(EMPTY_PYR, nr_tests = 10, modes = [0,1,2,3,4],T=120)
 
-    stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_2')
-    plot_benchmark(stats_books)
-    plt.show()
+
+    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_3')
+    # plot_benchmark(stats_books)
+    # plt.show()
 
 
     # solution_folder = "solutions\\IQpuzzlerPRO\\books\\main_puzzles\\result_1"

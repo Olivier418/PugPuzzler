@@ -14,7 +14,9 @@ DIFFICULTY_COLORS = {
 MODE_COLORS = {
     0: "#CCD88B",
     1: "#FFDD87",
-    2: "#F76773"
+    2: "#F76773",
+    3: "#B06FC4",
+    4: "#4FA3D1",
 }
 
 SOLUTION_DIR = "solutions"

@@ -1,5 +1,6 @@
 import copy
 from collections import UserDict
+from functools import cached_property
 import itertools
 
 import numpy as np
@@ -49,6 +50,169 @@ class Setup:
             idx: self.flat_to_compact[flat]
             for idx, flat in self.placements.items()
         }
+
+    @cached_property
+    def cell_coords(self) -> np.ndarray:
+        """(n_cells, ndim) lattice coordinates of every compact cell --
+        the inverse view of compact_to_flat, unravelled back into board
+        coordinates. Cached because the symmetry search below runs on it
+        at every node of a mode-4 solve."""
+        return np.stack(
+            np.unravel_index(self.compact_to_flat, self.board.cells.shape), axis=-1
+        )
+
+    @cached_property
+    def _identity_perm(self) -> np.ndarray:
+        """The identity cell permutation, shared rather than reallocated:
+        region_symmetries returns it on the overwhelmingly common
+        no-symmetry path, and nothing ever mutates a returned image."""
+        return np.arange(self.n_cells, dtype=np.int64)
+
+    @cached_property
+    def _point_group_coords(self) -> np.ndarray:
+        """(K, n_cells, ndim): every cell's coordinates under every matrix
+        of the lattice's point group, precomputed so region_symmetries
+        never has to do coordinate arithmetic at all -- it just gathers
+        the rows it wants. Tiny (48 x 55 x 3 on the pyramid) and pure
+        board geometry."""
+        return np.einsum(
+            "kij,nj->kni", self.board.lattice.point_group, self.cell_coords
+        )
+
+    @cached_property
+    def _symmetry_tables(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Flattens the whole symmetry search into integer table lookups,
+        so region_symmetries does no coordinate arithmetic at all. Returns
+        `(transformed_flat, cell_flat, lookup)`.
+
+        Everything is indexed into a *padded* grid big enough that any
+        point-group image of any sub-region, translated anywhere it could
+        plausibly land, still falls inside it. That matters because
+        flattening is only linear -- `flat(a) - flat(b) == flat(a - b)`,
+        and comparing flat values is comparing coordinates
+        lexicographically -- while nothing wraps around an axis. The
+        padding is derived from the actual extremes of
+        _point_group_coords, so it is exactly as large as it needs to be.
+
+        - `transformed_flat[k][i]`: cell i's coordinates under matrix k,
+          flattened. Only ever used in differences, so its origin is
+          arbitrary.
+        - `cell_flat[i]`: cell i's own coordinates, flattened.
+        - `lookup[f]`: the compact cell at padded flat index f, or
+          `n_cells` -- one past the end -- for anything that isn't one of
+          the board's cells, so an off-board hit indexes a sentinel slot
+          instead of needing its own test.
+        """
+        transformed = self._point_group_coords
+        low = transformed.min(axis=(0, 1))
+        pad = transformed.max(axis=(0, 1)) - low
+
+        padded_shape = np.asarray(self.board.cells.shape) + 2 * pad
+        strides = np.ones(self.board.ndim, dtype=np.int64)
+        for axis in range(self.board.ndim - 2, -1, -1):
+            strides[axis] = strides[axis + 1] * padded_shape[axis + 1]
+
+        transformed_flat = (transformed - low) @ strides
+        cell_flat = (self.cell_coords + pad) @ strides
+
+        lookup = np.full(int(np.prod(padded_shape)), self.n_cells, dtype=np.int64)
+        lookup[cell_flat] = np.arange(self.n_cells)
+        return transformed_flat, cell_flat, lookup
+
+    def region_symmetries(self, region: np.ndarray) -> list[np.ndarray]:
+        """Every symmetry of an arbitrary sub-region of the board's cells,
+        as a permutation of compact cell indices: image[i] is the compact
+        index cell i maps to. Each returned image is the **identity
+        outside the region**, so applying one to a whole grid only ever
+        rearranges the region itself. Always includes the identity.
+
+        `region` is a compact (n_cells,) bool mask. Passing an all-True
+        mask gives the whole board's symmetries (see board_symmetries);
+        passing a solver node's still-open cells gives that leftover
+        shape's own symmetries, which are generally *not* restrictions of
+        any whole-board symmetry -- a symmetric pocket left in an
+        otherwise asymmetric board is the whole point of Solver's mode 4.
+
+        Only the lattice's point group has to be searched, not point
+        group x translations: a finite region admits no nontrivial
+        translational self-symmetry (composing two candidate translations
+        for the same matrix gives a pure translation stabilising a finite
+        set, which must be zero), so for each matrix M there is at most
+        one translation t with M(region) + t == region. Lining up the two
+        shapes' lexicographically smallest cells recovers it directly.
+
+        Mode 4 calls this at (almost) every search node, so it is written
+        as a handful of integer array ops over precomputed tables (see
+        _symmetry_tables) covering the whole point group at once, rather
+        than a loop doing coordinate arithmetic per matrix. The common
+        result by far is "no symmetry", which costs one gather, one
+        shift and one membership test.
+        """
+        idx = np.flatnonzero(region)
+        if idx.size <= 1:
+            return [self._identity_perm]
+
+        transformed_flat, cell_flat, lookup = self._symmetry_tables
+
+        # (K, m) flat positions of the region's cells under every matrix,
+        # then shifted so each image's lexicographically smallest cell
+        # sits on the region's own. That shift is the only translation
+        # that can possibly work -- see the note on uniqueness above --
+        # and idx is ascending, so idx[0] is that smallest cell.
+        image = transformed_flat[:, idx]
+        image -= image.min(axis=1, keepdims=True)
+        image += cell_flat[idx[0]]
+
+        # A matrix is a symmetry iff every one of its images lands inside
+        # the region -- no need to compare cell sets. The map is injective
+        # (the matrix is invertible, the translation and the lookup are
+        # one-to-one), so m distinct cells inside a region of m cells can
+        # only be all of it. `inside` carries one extra False so that the
+        # off-board sentinel above falls through it.
+        inside = np.append(region, False)
+        compact = lookup[image]
+        rows = compact[inside[compact].all(axis=1)]
+
+        # Distinct matrices can act identically on a small region (every
+        # symmetry fixes a single cell, say), and the solver pays per
+        # image, so collapse those here -- comparing only the region's own
+        # cells, since the rest is the identity either way.
+        seen = set()
+        distinct = []
+        for row in rows:
+            key = row.tobytes()
+            if key not in seen:
+                seen.add(key)
+                distinct.append(row)
+
+        # A lone survivor can only be the identity (the images form a
+        # group), which is the overwhelmingly common case -- hand back the
+        # shared one rather than building a copy per node.
+        if len(distinct) == 1:
+            return [self._identity_perm]
+
+        images = []
+        for row in distinct:
+            image = self._identity_perm.copy()
+            image[idx] = row
+            images.append(image)
+        return images
+
+    @cached_property
+    def board_symmetries(self) -> list[np.ndarray]:
+        """The whole board's own symmetries -- region_symmetries applied
+        to every cell. Geometry-only (independent of blocks or
+        placements) and needed at every node of a mode-3 solve, so it's
+        cached here alongside placements rather than recomputed by the
+        solver.
+
+        Used by Solver's mode 3: at a given search node, the subgroup of
+        these that also fixes every already-decided cell in place tells
+        it which remaining branches are mirror/rotation images of one
+        another, so only one needs to be searched. Mode 4 calls
+        region_symmetries directly on the open region instead.
+        """
+        return self.region_symmetries(np.ones(self.n_cells, dtype=bool))
 
     def _valid_orientations(self, block: Block) -> list[np.ndarray]:
         k = block.ndim
