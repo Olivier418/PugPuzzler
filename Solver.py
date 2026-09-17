@@ -37,6 +37,13 @@ class Solver:
         # structure for splitting the empty region into components.
         self.label_structure = self.game.board.lattice.neighbor_structure
 
+        # game.grid/available_spots are compact (n_cells,), but
+        # scipy.ndimage.label needs a real N-D array to find geometric
+        # neighbors. Reused every call below as scratch space to scatter
+        # a compact mask into, label, then gather back down -- avoids
+        # reallocating a full board-shaped array on every node.
+        self._label_scratch = np.empty(self.game.board.cells.shape, dtype=bool)
+
         self.placements = self.game.placements
         self.block_counts = {idx: block.count for idx, block in self.game.blocks.items()}
 
@@ -63,6 +70,18 @@ class Solver:
         pruned_mask = np.zeros(block_mask.shape, dtype=bool)
         pruned_mask[kept_indices] = True
         return pruned_mask
+
+    def _label_available(self, available_spots: np.ndarray) -> tuple[np.ndarray, int]:
+        """available_spots is compact (n_cells,); scipy.ndimage.label
+        needs a real N-D array to find geometric neighbors, so scatter
+        into the full board-shaped scratch array, label, then gather the
+        per-cell labels back down to compact space. Isolated here as the
+        one place that needs the full board shape at all."""
+        setup = self.game.setup
+        self._label_scratch[:] = False
+        self._label_scratch.ravel()[setup.compact_to_flat] = available_spots
+        labels, num_components = label(self._label_scratch, structure=self.label_structure)
+        return labels.ravel()[setup.compact_to_flat], num_components
 
     def _prune_placement_masks(self, placement_masks, available_spots):
         unavailable_flat = (~available_spots).ravel()
@@ -100,7 +119,7 @@ class Solver:
                 return
 
             if mode in (1, 2):
-                labels, num_components = label(available_spots, structure=self.label_structure)
+                labels, num_components = self._label_available(available_spots)
                 if num_components > 1:
                     comp_label_ids = list(range(1, num_components + 1))
                     component_sizes = [int(np.sum(labels == lbl)) for lbl in comp_label_ids]

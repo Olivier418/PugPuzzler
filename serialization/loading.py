@@ -78,10 +78,15 @@ def _parse_board(data: dict) -> Board:
 
 
 def grid_to_letter_rows(setup: Setup, grid: np.ndarray, empty: str = " ") -> list[list[str]]:
-    """Inverse of Puzzle._initialize_grid: numeric grid -> row-major letters."""
-    letter_arr = np.full(grid.shape, empty, dtype="<U1")
+    """Inverse of Puzzle._initialize_grid: numeric grid -> row-major letters.
+
+    `grid` is compact (see Setup.__init__); expanded to the full board
+    shape here since the JSON 'grid' convention is full-shape, human-
+    authored rows."""
+    full_grid = setup.expand(grid)
+    letter_arr = np.full(full_grid.shape, empty, dtype="<U1")
     for idx, block in setup.blocks.items():
-        letter_arr[grid == idx] = block.letter
+        letter_arr[full_grid == idx] = block.letter
     return letter_arr.T.tolist()  # undo the transpose applied on load
 
 

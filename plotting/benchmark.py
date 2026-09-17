@@ -36,7 +36,9 @@ def _worker(puzzle: Puzzle, mode: int, seed: int, conn):
     try:
         conn.send(("ready", None))
         for sol in puzzle.solve(disp=False, mode=mode, seed=seed):
-            conn.send(("solution", sol.grid))
+            # sol.grid is compact; Solution.grids (and the JSON they get
+            # saved as) are full board-shaped, same as Solution.from_puzzle.
+            conn.send(("solution", puzzle.setup.expand(sol.grid)))
         conn.send(("done", None))
     except Exception as e:
         conn.send(("error", str(e)))

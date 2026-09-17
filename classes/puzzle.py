@@ -30,6 +30,26 @@ class Setup:
         self.placements = self._compute_placement_indices()
         self._validate()
 
+        # Compact indexing: internally, grids only ever cover the board's
+        # real cells (no OUTSIDE_BOARD dead weight -- can be ~half the
+        # array on a PyramidBoard). compact_to_flat/flat_to_compact map
+        # between that dense 0..n_cells-1 range and the full board-shaped
+        # flat indexing placements were originally computed in.
+        cells_flat = self.board.cells.ravel()
+        self.compact_to_flat = np.flatnonzero(cells_flat)
+        self.n_cells = self.compact_to_flat.size
+        self.flat_to_compact = np.full(cells_flat.size, -1, dtype=np.int64)
+        self.flat_to_compact[self.compact_to_flat] = np.arange(self.n_cells)
+
+        # Placements are computed above as flat indices into the full
+        # board shape; re-base them into compact space once here so every
+        # other consumer (State.grid, Solver) only ever deals with the
+        # dense range.
+        self.placements = {
+            idx: self.flat_to_compact[flat]
+            for idx, flat in self.placements.items()
+        }
+
     def _valid_orientations(self, block: Block) -> list[np.ndarray]:
         k = block.ndim
 
@@ -119,8 +139,26 @@ class Setup:
         `classes.rendering` (a display concern, not part of this class's
         board/blocks/placements model); this is a thin facade so callers
         can keep saying `setup.render(...)`.
+
+        `grid` is compact (see __init__); rendering needs the real
+        board shape (with OUTSIDE_BOARD filled back in) to draw the
+        board's silhouette, so it's expanded here at this one boundary.
         """
-        return _render(self.board, self.blocks, grid, header=header, leftover_idcs=leftover_idcs, print_letters=print_letters)
+        return _render(self.board, self.blocks, self.expand(grid), header=header, leftover_idcs=leftover_idcs, print_letters=print_letters)
+
+    def expand(self, grid: np.ndarray) -> np.ndarray:
+        """Scatter a compact (n_cells,) grid back into a full board-shaped
+        array, OUTSIDE_BOARD everywhere else. Used at the rendering and
+        disk-serialization boundaries -- the only places that need the
+        real board shape back."""
+        full = np.full(self.board.cells.size, OUTSIDE_BOARD, dtype=grid.dtype)
+        full[self.compact_to_flat] = grid
+        return full.reshape(self.board.cells.shape)
+
+    def compact(self, full_grid: np.ndarray) -> np.ndarray:
+        """Inverse of expand(): pull a full board-shaped grid (e.g. read
+        from disk, or a JSON letter_grid) down to compact space."""
+        return full_grid.ravel()[self.compact_to_flat]
 
 
 class State:
@@ -153,14 +191,16 @@ class State:
         return self.setup.placements
 
     def _fresh_grid(self) -> np.ndarray:
-        """An empty grid: EMPTY on cells that are part of the board,
-        OUTSIDE_BOARD everywhere else."""
-        return np.where(self.board.cells, EMPTY, OUTSIDE_BOARD)
+        """An empty grid: EMPTY on every one of the board's real cells.
+        Compact -- shape (n_cells,) -- no OUTSIDE_BOARD cells are stored
+        internally at all; those only reappear when expanding back to the
+        full board shape (rendering, disk I/O)."""
+        return np.full(self.setup.n_cells, EMPTY)
 
     def place(self, block_idx: int, placement_idx: int):
         """Place a block on the grid at the specified placement index."""
         placement_idcs = self.placements[block_idx][placement_idx]
-        if not np.all(self.grid.flat[placement_idcs] == EMPTY):
+        if not np.all(self.grid[placement_idcs] == EMPTY):
             raise ValueError("Placement overlaps existing blocks.")
         if not self.chosen_placement_idx[block_idx] == UNPLACED:
             raise ValueError("Block is already placed.")
@@ -173,7 +213,7 @@ class State:
         Solver, whose own pruning makes place()'s checks redundant on
         every call in its search loop. Everyone else should use place()."""
         placement_idcs = self.placements[block_idx][placement_idx]
-        self.grid.flat[placement_idcs] = block_idx
+        self.grid[placement_idcs] = block_idx
         self.chosen_placement_idx[block_idx] = placement_idx
 
     def remove(self, block_idx):
@@ -188,7 +228,7 @@ class State:
         knows the block is placed."""
         placement_idx = self.chosen_placement_idx[block_idx]
         placement_idcs = self.placements[block_idx][placement_idx]
-        self.grid.flat[placement_idcs] = EMPTY
+        self.grid[placement_idcs] = EMPTY
         self.chosen_placement_idx[block_idx] = UNPLACED
 
     def clear(self):
@@ -256,7 +296,7 @@ class Puzzle(State):
         # boundary. See serialization.loading._cells_from_json for the
         # board-cells counterpart of this exact rule.
         arr = np.asarray(letter_grid).T
-        if arr.shape != self.grid.shape:
+        if arr.shape != self.board.cells.shape:
             raise ValueError(f"letter_grid is not the same shape as the board in puzzle '{self.name}'.")
 
         # Map letters to indices
@@ -278,10 +318,13 @@ class Puzzle(State):
             if not mask.any():
                 continue
 
-            self.grid[mask] = idx
+            # mask is full board-shaped (arr's shape); grid is compact, so
+            # its cell indices are re-based through the same
+            # flat_to_compact mapping placements were computed with.
+            placed_indices = self.setup.flat_to_compact[np.flatnonzero(mask)]
+            self.grid[placed_indices] = idx
 
             # Pure NumPy placement check: match 1D indices across rows
-            placed_indices = np.flatnonzero(mask)
             valid_placements = self.placements[idx]  # Shape: (N, block_size)
 
             # Ensure cell count matches, then find which placement row (if any) matches

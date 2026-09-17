@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import time
 
 from Solver import Solver
-from SolverV2 import SolverV2
 
 
 if __name__=="__main__":
@@ -55,24 +54,3 @@ if __name__=="__main__":
     # sols_new = {sol.grid.tobytes() for sol in Solver(test_pyramid).solve(mode=2, seed=0)}
     # pr.disable()
     # pstats.Stats(pr).sort_stats('cumulative').print_stats(20)
-
-
-    # BASE_DIR = os.path.join("solutions")
-
-    # solution_book = SolutionBook.from_puzzlebook(pyramid_puzzle_book, disp=True)
-    # solution_folder = save_solutions(solution_book, BASE_DIR)
-
-    # # Solutions were already computed and saved in a previous run: reload them 
-    # # solution_folder = os.path.join(BASE_DIR, "IQpuzzler_main_puzzles_solutions\\20260914_215811")
-    # # solution_book = load_solutionbook(solution_folder)
-
-    # plot_difficulty_space(solution_book)
-    # plot_solve_timeline(solution_book)
-    # plt.show()
-
-    # BASE_DIR = os.path.join("benchmarks", "IQpuzzlerPRO")
-
-    # books, run_folder = run_benchmark(alt_empty_PRO, modes=[0, 1, 2], nr_tests=30, T=30.0, base_folder=BASE_DIR)
-    # books = load_benchmark(run_folder)   # no setup needed anywhere
-    # plot_benchmark(books)
-    # plt.show()

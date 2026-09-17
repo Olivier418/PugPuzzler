@@ -92,7 +92,11 @@ class Solution:
         grids = []
         elapsed = []
         for state in puzzle.solve(mode=mode, seed=seed, disp=disp):
-            grids.append(state.grid.copy())
+            # Solution.grids are kept full board-shaped (matching the
+            # on-disk format) even though State.grid itself is compact --
+            # expanding here, once per solution, keeps every other reader
+            # of Solution.grids (serialization, plotting) unchanged.
+            grids.append(state.setup.expand(state.grid))
             elapsed.append(time.perf_counter() - start)
         duration = time.perf_counter() - start
 
@@ -146,7 +150,7 @@ class Solution:
         states = []
         for grid in self.grids:
             state = State(setup)
-            state.grid = grid.copy()
+            state.grid = setup.compact(grid)
             states.append(state)
         return states
 
