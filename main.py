@@ -22,12 +22,15 @@ if __name__=="__main__":
 
     # IQquub = load_game("games/IQquub")
     # solution, stats = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
-    EMPTY = IQpuzzler.puzzles['empty_main']
+    # EMPTY = IQpuzzler.puzzles['empty_main']
 
-    stats_books, path = run_benchmark(EMPTY, nr_tests = 2)
-    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\20260917_131737')
-    plot_benchmark(stats_books)
-    plt.show()
+    # stats_books, _ = run_benchmark(EMPTY, nr_tests = 2)
+    # plot_benchmark(stats_books)
+    # plt.show()
+
+    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_1')
+    # plot_benchmark(stats_books)
+    # plt.show()
 
 
     # solution_folder = "solutions\\IQpuzzlerPRO\\books\\main_puzzles\\result_1"
@@ -48,9 +51,11 @@ if __name__=="__main__":
 
     # print(f"old: {t1-start}, new: {t2-t1}")
 
-    # import cProfile, pstats
-    # pr = cProfile.Profile()
-    # pr.enable()
-    # sols_new = {sol.grid.tobytes() for sol in Solver(test_pyramid).solve(mode=2, seed=0)}
-    # pr.disable()
-    # pstats.Stats(pr).sort_stats('cumulative').print_stats(20)
+    test_pyramid = IQpuzzler.books['pyramid_puzzles']['100']
+
+    import cProfile, pstats
+    pr = cProfile.Profile()
+    pr.enable()
+    sols_new = {sol.grid.tobytes() for sol in Solver(test_pyramid).solve(mode=2, seed=0)}
+    pr.disable()
+    pstats.Stats(pr).sort_stats('cumulative').print_stats(20)
