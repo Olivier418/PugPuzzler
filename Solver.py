@@ -55,21 +55,42 @@ class Solver:
             if placement_idx != UNPLACED
         }
 
+    def _build_cell_to_placements(self):
+        """Reverse index: cell -> placement indices that occupy it, per
+        block. Lets a single piece placement invalidate only the (few)
+        other placements that actually overlap its cells, instead of
+        re-testing every remaining placement against the whole board on
+        every recursive call. Built fresh per solve() call (after any
+        seed-driven shuffle of self.placements' row order) rather than in
+        __init__, since it indexes placements by row position and a
+        shuffle would otherwise leave it stale."""
+        n_cells = self.game.setup.n_cells
+        cell_to_placements = {}
+        for block_idx, placements in self.placements.items():
+            buckets = [[] for _ in range(n_cells)]
+            for p_idx, cells in enumerate(placements):
+                for c in cells:
+                    buckets[c].append(p_idx)
+            cell_to_placements[block_idx] = [
+                np.array(b, dtype=np.intp) for b in buckets
+            ]
+        return cell_to_placements
+
     def _filter_block_mask(self, block_idx, block_mask, unavailable_flat):
         active_indices = np.flatnonzero(block_mask)
         if active_indices.size == 0:
-            return None
+            return None, 0
 
         placements = self.placements[block_idx][active_indices]      # (M, count)
         valid = ~np.any(unavailable_flat[placements], axis=1)         # gather, not broadcast-compare
         kept_indices = active_indices[valid]
 
         if kept_indices.size == 0:
-            return None
+            return None, 0
 
         pruned_mask = np.zeros(block_mask.shape, dtype=bool)
         pruned_mask[kept_indices] = True
-        return pruned_mask
+        return pruned_mask, kept_indices.size
 
     def _label_available(self, available_spots: np.ndarray) -> tuple[np.ndarray, int]:
         """available_spots is compact (n_cells,); scipy.ndimage.label
@@ -84,22 +105,60 @@ class Solver:
         return labels.ravel()[setup.compact_to_flat], num_components
 
     def _prune_placement_masks(self, placement_masks, available_spots):
+        """Full re-check of every active placement of every block against
+        the whole current availability mask. Only needed the first time a
+        mask is built for a given available_spots (initial call, or a
+        freshly-split connected component in mode 2) -- see
+        _prune_placement_masks_incremental for the hot path."""
         unavailable_flat = (~available_spots).ravel()
         pruned_masks = {}
+        counts = {}
 
         for block_idx, block_mask in placement_masks.items():
-            pruned_mask = self._filter_block_mask(block_idx, block_mask, unavailable_flat)
+            pruned_mask, count = self._filter_block_mask(block_idx, block_mask, unavailable_flat)
             if pruned_mask is None:
-                return None
+                return None, None
             pruned_masks[block_idx] = pruned_mask
+            counts[block_idx] = count
 
-        return pruned_masks
+        return pruned_masks, counts
+
+    def _prune_placement_masks_incremental(self, placement_masks, newly_unavailable):
+        """placement_masks is already fully valid against every cell that
+        was unavailable *before* this step -- only newly_unavailable (the
+        cells the just-placed piece occupies) are new information. So for
+        each block, only the (usually tiny) set of placements that touch
+        one of those cells can possibly have become invalid; everything
+        else is untouched and doesn't need re-testing."""
+        pruned_masks = {}
+        counts = {}
+
+        for block_idx, mask in placement_masks.items():
+            cell_lists = self._cell_to_placements[block_idx]
+            affected = [cell_lists[c] for c in newly_unavailable if cell_lists[c].size]
+
+            if affected:
+                idxs = np.concatenate(affected)
+                new_mask = mask.copy()
+                new_mask[idxs] = False
+            else:
+                new_mask = mask
+
+            count = int(np.count_nonzero(new_mask))
+            if count == 0:
+                return None, None
+            pruned_masks[block_idx] = new_mask
+            counts[block_idx] = count
+
+        return pruned_masks, counts
 
     def solve(self, mode: int = 2, seed: int = None):
         if seed is not None:
             np.random.seed(seed)
             for arr in self.placements.values():
                 np.random.shuffle(arr)
+
+        self._cell_to_placements = self._build_cell_to_placements()
 
         def finish(on_complete):
             if on_complete is not None:
@@ -109,12 +168,17 @@ class Solver:
                 # keeps getting mutated as the search backtracks further).
                 yield self.game.copy()
 
-        def rec(placement_masks, available_spots, on_complete=None):
+        def rec(placement_masks, available_spots, on_complete=None, newly_unavailable=None):
             if not placement_masks:
                 yield from finish(on_complete)
                 return
 
-            pruned_masks = self._prune_placement_masks(placement_masks, available_spots)
+            if newly_unavailable is None:
+                pruned_masks, counts = self._prune_placement_masks(placement_masks, available_spots)
+            else:
+                pruned_masks, counts = self._prune_placement_masks_incremental(
+                    placement_masks, newly_unavailable
+                )
             if pruned_masks is None:
                 return
 
@@ -122,7 +186,7 @@ class Solver:
                 labels, num_components = self._label_available(available_spots)
                 if num_components > 1:
                     comp_label_ids = list(range(1, num_components + 1))
-                    component_sizes = [int(np.sum(labels == lbl)) for lbl in comp_label_ids]
+                    component_sizes = np.bincount(labels[labels > 0], minlength=num_components + 1)[1:].tolist()
 
                     block_indices = list(pruned_masks.keys())
                     piece_counts = [self.block_counts[idx] for idx in block_indices]
@@ -149,7 +213,7 @@ class Solver:
 
                                 for i in group:
                                     b_idx = block_indices[i]
-                                    block_mask = self._filter_block_mask(
+                                    block_mask, _ = self._filter_block_mask(
                                         b_idx,
                                         pruned_masks[b_idx],
                                         comp_unavailable_flat,
@@ -165,7 +229,7 @@ class Solver:
                                 yield from chain_components(components, on_complete)
                         return
 
-            next_block_idx = min(pruned_masks, key=lambda k: np.count_nonzero(pruned_masks[k]))
+            next_block_idx = min(counts, key=counts.get)
             removed_mask = pruned_masks.pop(next_block_idx)
 
             for placement_idx in np.flatnonzero(removed_mask):
@@ -174,7 +238,7 @@ class Solver:
                 self.game.place_unchecked(next_block_idx, placement_idx)
                 available_spots.flat[placement] = False
 
-                yield from rec(pruned_masks, available_spots, on_complete)
+                yield from rec(pruned_masks, available_spots, on_complete, newly_unavailable=placement)
 
                 self.game.remove_unchecked(next_block_idx)
                 available_spots.flat[placement] = True

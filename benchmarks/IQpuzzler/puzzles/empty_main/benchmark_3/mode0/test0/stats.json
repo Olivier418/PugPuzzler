@@ -1,0 +1,15 @@
+{
+  "mode": 0,
+  "seed": 0,
+  "puzzles": [
+    {
+      "puzzle_name": "empty_main",
+      "mode": 0,
+      "seed": 0,
+      "duration": 5.004853300008108,
+      "elapsed": [
+        3.4396525000047404
+      ]
+    }
+  ]
+}
