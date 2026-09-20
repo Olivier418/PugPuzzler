@@ -1,0 +1,16 @@
+{
+  "mode": 2,
+  "seed": 2,
+  "puzzles": [
+    {
+      "puzzle_name": "empty_pyramid",
+      "mode": 2,
+      "seed": 2,
+      "duration": 240.00886719999835,
+      "elapsed": [
+        210.2820893000171,
+        212.4288875000202
+      ]
+    }
+  ]
+}

@@ -25,14 +25,18 @@ if __name__=="__main__":
     
     
     
-    EMPTY_MAIN = IQpuzzler.puzzles['empty_main']
-    stats_books, _ = run_benchmark(EMPTY_MAIN, nr_tests = 10, modes = [0,1,2,3,4],T=120)
-    # plot_benchmark(stats_books),
-    # plt.show()
+    # EMPTY_MAIN = IQpuzzler.puzzles['empty_main']
+    # stats_books, _ = run_benchmark(EMPTY_MAIN, nr_tests = 10, modes = [0,1,2,3,4],T=30)
+    stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_9')
+    plot_benchmark(stats_books),
+    plt.show()
 
     
-    EMPTY_PYR = IQpuzzler.puzzles['empty_main']
-    stats_books, _ = run_benchmark(EMPTY_PYR, nr_tests = 10, modes = [0,1,2,3,4],T=120)
+    # EMPTY_PYR = IQpuzzler.puzzles['empty_pyramid']
+    # stats_books, _ = run_benchmark(EMPTY_PYR, nr_tests = 10, modes = [0,1,2,3,4],T=240)
+    stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_pyramid\\benchmark_3')
+    plot_benchmark(stats_books),
+    plt.show()
 
 
     # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_3')
