@@ -1,0 +1,562 @@
+[
+  {
+    "puzzle_name": "41",
+    "grids": [
+      [" FFII    ",
+       "FFBID    ",
+       "FBBBDDE  ",
+       "LBLGKDE  ",
+       "LLLGKKEEA",
+       "  GGKCCEA",
+       "  HHHCJAA",
+       "    HCJJA",
+       "    HCJJ "]
+    ]
+  },
+  {
+    "puzzle_name": "42",
+    "grids": [
+      [" CCCC    ",
+       "BEEEC    ",
+       "BBBEEFF  ",
+       "LBLGFFA  ",
+       "LLLGFAAAA",
+       "  GGKKKDD",
+       "  HHHKDDI",
+       "    HJJII",
+       "    HJJJ "]
+    ]
+  },
+  {
+    "puzzle_name": "43",
+    "grids": [
+      [" KGGG    ",
+       "KKJJG    ",
+       "IKJJEEE  ",
+       "IIJEEDD  ",
+       "CCCCFFDDA",
+       "  LCLFFAA",
+       "  LLLBFHA",
+       "    BBBHA",
+       "    BHHH "]
+    ]
+  },
+  {
+    "puzzle_name": "44",
+    "grids": [
+      [" ACCE    ",
+       "AACEE    ",
+       "GACEIID  ",
+       "GACEIDD  ",
+       "GGJBBDHHH",
+       "  JJBBFFH",
+       "  JJBFFKH",
+       "    LFLKK",
+       "    LLLK "]
+    ]
+  },
+  {
+    "puzzle_name": "45",
+    "grids": [
+      [" GGFF    ",
+       "HGFFB    ",
+       "HGFDBBB  ",
+       "HHHDDBK  ",
+       "CCCCDKKKA",
+       "  LCLEIAA",
+       "  LLLEIIA",
+       "    EEJJA",
+       "    EJJJ "]
+    ]
+  },
+  {
+    "puzzle_name": "46",
+    "grids": [
+      [" CCCC    ",
+       "AAAAC    ",
+       "KAIILLL  ",
+       "KKIBLEL  ",
+       "KBBBFEEJJ",
+       "  BFFGEJJ",
+       "  FFHGEJD",
+       "    HGGDD",
+       "    HHHD "]
+    ]
+  },
+  {
+    "puzzle_name": "47",
+    "grids": [
+      [" FFJJ    ",
+       "FFJJJ    ",
+       "FEEEBCC  ",
+       "EEBBBCG  ",
+       "HHHBDCGGG",
+       "  HDDCKKK",
+       "  HDLLLKI",
+       "    LALII",
+       "    AAAA "]
+    ]
+  },
+  {
+    "puzzle_name": "48",
+    "grids": [
+      [" AHHH    ",
+       "AAAAH    ",
+       "LLBEHCC  ",
+       "LBBEECK  ",
+       "LLBBECKKF",
+       "  JJECKFF",
+       "  JJJIFFD",
+       "    IIGDD",
+       "    GGGD "]
+    ]
+  },
+  {
+    "puzzle_name": "49",
+    "grids": [
+      [" CCCC    ",
+       "HHHFC    ",
+       "JJHFFII  ",
+       "JJHBFFI  ",
+       "JBBBEEELL",
+       "  BKDDEEL",
+       "  KKKDDLL",
+       "    GAAAA",
+       "    GGGA "]
+    ]
+  },
+  {
+    "puzzle_name": "50",
+    "grids": [
+      [" AAAA    ",
+       "HHHAB    ",
+       "HGIIBBE  ",
+       "HGIBBEE  ",
+       "GGLLLECCD",
+       "  LKLECDD",
+       "  KKKJCDF",
+       "    JJCFF",
+       "    JJFF "]
+    ]
+  },
+  {
+    "puzzle_name": "51",
+    "grids": [
+      [" AAAA    ",
+       "CCIAB    ",
+       "CHIIBBB  ",
+       "CHEEEBK  ",
+       "CHHHEEKKF",
+       "  JJGGKFF",
+       "  JJJGFFD",
+       "    LGLDD",
+       "    LLLD "]
+    ]
+  },
+  {
+    "puzzle_name": "52",
+    "grids": [
+      [" LLIA    ",
+       "GLIIA    ",
+       "GLLAACC  ",
+       "GGEEACJ  ",
+       "EEEFFCJJH",
+       "  FFKCJJH",
+       "  FKKBHHH",
+       "    KBBDD",
+       "    BBDD "]
+    ]
+  },
+  {
+    "puzzle_name": "53",
+    "grids": [
+      [" AAAA    ",
+       "CCEAB    ",
+       "CEEBBBD  ",
+       "CEGBIDD  ",
+       "CEGIIDJJJ",
+       "  GGFFJJK",
+       "  HHHFFKK",
+       "    HLFLK",
+       "    HLLL "]
+    ]
+  },
+  {
+    "puzzle_name": "54",
+    "grids": [
+      [" GGGH    ",
+       "CCDGH    ",
+       "CDDAHHH  ",
+       "CDAAAAB  ",
+       "CEEEBBBFF",
+       "  IEEBFFK",
+       "  IILLFKK",
+       "    LJJJK",
+       "    LLJJ "]
+    ]
+  },
+  {
+    "puzzle_name": "55",
+    "grids": [
+      [" CCCC    ",
+       "LLLDC    ",
+       "LALDDGG  ",
+       "AAAADGE  ",
+       "HHHIIGEJJ",
+       "  HIKEEJJ",
+       "  HKKEFBJ",
+       "    KFFBB",
+       "    FFBB "]
+    ]
+  },
+  {
+    "puzzle_name": "56",
+    "grids": [
+      [" EEEG    ",
+       "EEGGG    ",
+       "HHHAAAA  ",
+       "HCCCCAD  ",
+       "HIIBCDDFF",
+       "  IBBDFFK",
+       "  BBLLFKK",
+       "    LJJJK",
+       "    LLJJ "]
+    ]
+  },
+  {
+    "puzzle_name": "57",
+    "grids": [
+      [" IIJJ    ",
+       "AIJJJ    ",
+       "AHHHCCE  ",
+       "AABHCEE  ",
+       "ABBHCELLL",
+       "  BBCELDL",
+       "  GGGFFDD",
+       "    GKFFD",
+       "    KKKF "]
+    ]
+  },
+  {
+    "puzzle_name": "58",
+    "grids": [
+      [" EEEB    ",
+       "EEABB    ",
+       "LLAHBBG  ",
+       "LAAHGGG  ",
+       "LLAHHHCCD",
+       "  IKKKCDD",
+       "  IIKJCDF",
+       "    JJCFF",
+       "    JJFF "]
+    ]
+  },
+  {
+    "puzzle_name": "59",
+    "grids": [
+      [" CCCC    ",
+       "LLBBC    ",
+       "LBBKIIG  ",
+       "LLBKKIG  ",
+       "HHHKFFGGA",
+       "  HFFDEAA",
+       "  HFDDEEA",
+       "    DJJEA",
+       "    JJJE "]
+    ]
+  },
+  {
+    "puzzle_name": "60",
+    "grids": [
+      [" BBFF    ",
+       "BBFFA    ",
+       "KBFAAAA  ",
+       "KKDDJJE  ",
+       "KDDJJJEII",
+       "  CCCCEEI",
+       "  HHHCLEL",
+       "    HGLLL",
+       "    HGGG "]
+    ]
+  },
+  {
+    "puzzle_name": "61",
+    "grids": [
+      [" ALLL    ",
+       "AALBL    ",
+       "HABBBJJ  ",
+       "HABEJJJ  ",
+       "HHHECCCCG",
+       "  EEKIICG",
+       "  EKKIFGG",
+       "    KFFDD",
+       "    FFDD "]
+    ]
+  },
+  {
+    "puzzle_name": "62",
+    "grids": [
+      [" JJJE    ",
+       "CCJJE    ",
+       "CIIEEFF  ",
+       "CIKEFFD  ",
+       "CKKLFLDDA",
+       "  KLLLBDA",
+       "  HHHBBAA",
+       "    HGBBA",
+       "    HGGG "]
+    ]
+  },
+  {
+    "puzzle_name": "63",
+    "grids": [
+      [" CCCC    ",
+       "LLJJC    ",
+       "LJJJHHH  ",
+       "LLEEHDD  ",
+       "EEEBHKDDF",
+       "  BBBKKFF",
+       "  BIIKFFG",
+       "    IAGGG",
+       "    AAAA "]
+    ]
+  },
+  {
+    "puzzle_name": "64",
+    "grids": [
+      [" JJJH    ",
+       "DJJIH    ",
+       "DDIIHHH  ",
+       "LDLGKEE  ",
+       "LLLGKKEEE",
+       "  GGKCCCC",
+       "  AAAAFBC",
+       "    AFFBB",
+       "    FFBB "]
+    ]
+  },
+  {
+    "puzzle_name": "65",
+    "grids": [
+      [" BJJJ    ",
+       "BBBJJ    ",
+       "BDCCCCH  ",
+       "DDEEECH  ",
+       "DEEFFAHHH",
+       "  FFAALLL",
+       "  FIIALKL",
+       "    IAGKK",
+       "    GGGK "]
+    ]
+  },
+  {
+    "puzzle_name": "66",
+    "grids": [
+      [" AAAA    ",
+       "CCAFF    ",
+       "CLLKFFH  ",
+       "CLKKKFH  ",
+       "CLLBHHHII",
+       "  BBBGEDI",
+       "  BGGGEDD",
+       "    JJEED",
+       "    JJJE "]
+    ]
+  },
+  {
+    "puzzle_name": "67",
+    "grids": [
+      [" EEEB    ",
+       "EEBBB    ",
+       "HHHBALL  ",
+       "HFAAAAL  ",
+       "HFFDDLLJJ",
+       "  FFDDJJJ",
+       "  GGGCCCC",
+       "    GKIIC",
+       "    KKKI "]
+    ]
+  },
+  {
+    "puzzle_name": "68",
+    "grids": [
+      [" BHHH    ",
+       "ABBBH    ",
+       "AABKHII  ",
+       "AEKKLLI  ",
+       "AEEKLCCCC",
+       "  EFLLDDC",
+       "  EFFDDJJ",
+       "    FFGJJ",
+       "    GGGJ "]
+    ]
+  },
+  {
+    "puzzle_name": "69",
+    "grids": [
+      [" FKKK    ",
+       "AFFKH    ",
+       "AAFFHII  ",
+       "ABHHHIG  ",
+       "ABBBDDGGG",
+       "  BDDJJJE",
+       "  CCCCJJE",
+       "    LCLEE",
+       "    LLLE "]
+    ]
+  },
+  {
+    "puzzle_name": "70",
+    "grids": [
+      [" AAAA    ",
+       "CCLAL    ",
+       "CKLLLEG  ",
+       "CKKFFEG  ",
+       "CKFFEEGGB",
+       "  FIEJBBB",
+       "  IIHJJBD",
+       "    HJJDD",
+       "    HHHD "]
+    ]
+  },
+  {
+    "puzzle_name": "71",
+    "grids": [
+      [" LLJJ    ",
+       "CCLJJ    ",
+       "CLLKJFF  ",
+       "CEKKFFB  ",
+       "CEEKFBBBH",
+       "  EAAAABH",
+       "  EDDAHHH",
+       "    DDGII",
+       "    GGGI "]
+    ]
+  },
+  {
+    "puzzle_name": "72",
+    "grids": [
+      [" JJCC    ",
+       "GJJCK    ",
+       "GJHCKKF  ",
+       "GGHCKFF  ",
+       "HHHDFFALL",
+       "  DDIIAAL",
+       "  DBBIALL",
+       "    BBAEE",
+       "    BEEE "]
+    ]
+  },
+  {
+    "puzzle_name": "73",
+    "grids": [
+      [" FFJJ    ",
+       "FFBJJ    ",
+       "FBBBJCC  ",
+       "LBLIICD  ",
+       "LLLKICDDA",
+       "  KKKCEDA",
+       "  HHHGEAA",
+       "    HGEEA",
+       "    HGGE "]
+    ]
+  },
+  {
+    "puzzle_name": "74",
+    "grids": [
+      [" EBLL    ",
+       "EEBBL    ",
+       "EBBLLGG  ",
+       "EKCCCCG  ",
+       "KKKFFCGII",
+       "  FFAAAAI",
+       "  FDDAHJJ",
+       "    DDHJJ",
+       "    HHHJ "]
+    ]
+  },
+  {
+    "puzzle_name": "75",
+    "grids": [
+      [" AAAA    ",
+       "LLKAH    ",
+       "LKKKHEG  ",
+       "LLHHHEG  ",
+       "CCCCEEGGB",
+       "  ICEDBBB",
+       "  IIJDDBF",
+       "    JJDFF",
+       "    JJFF "]
+    ]
+  },
+  {
+    "puzzle_name": "76",
+    "grids": [
+      [" FFCC    ",
+       "FFDCE    ",
+       "FDDCEEH  ",
+       "LDLCIEH  ",
+       "LLLIIEHHH",
+       "  JJAAAAK",
+       "  JJJABKK",
+       "    GBBBK",
+       "    GGGB "]
+    ]
+  },
+  {
+    "puzzle_name": "77",
+    "grids": [
+      [" CCCC    ",
+       "AAAAC    ",
+       "KAJJJGG  ",
+       "KKJJBBG  ",
+       "KDDBBEGII",
+       "  DDBEFFI",
+       "  HHHEEFF",
+       "    HLELF",
+       "    HLLL "]
+    ]
+  },
+  {
+    "puzzle_name": "78",
+    "grids": [
+      [" AGGG    ",
+       "AAAAG    ",
+       "HHHCCCC  ",
+       "HDKKKJC  ",
+       "HDDKFJJII",
+       "  DFFJJIE",
+       "  FFLLBBE",
+       "    LBBEE",
+       "    LLBE "]
+    ]
+  },
+  {
+    "puzzle_name": "79",
+    "grids": [
+      [" AAAA    ",
+       "CCAFF    ",
+       "CHFFJJJ  ",
+       "CHFDDJJ  ",
+       "CHHHDDEEE",
+       "  IIKEEGG",
+       "  IKKBLLG",
+       "    KBBLG",
+       "    BBLL "]
+    ]
+  },
+  {
+    "puzzle_name": "80",
+    "grids": [
+      [" EJJJ    ",
+       "AEEJJ    ",
+       "AAECCCC  ",
+       "ABEIIHC  ",
+       "ABBBIHLLL",
+       "  BHHHLDL",
+       "  GGGFFDD",
+       "    GKFFD",
+       "    KKKF "]
+    ]
+  }
+]

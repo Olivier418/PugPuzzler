@@ -20,8 +20,6 @@ class Lattice:
         has unit length - i.e. every direction a block can step in.
       - point_group: every rotation/reflection that maps the lattice
         onto itself, as integer matrices.
-      - neighbor_structure: the boolean stencil of which grid cells
-        (offset by -1/0/1 along each axis) count as adjacent.
 
     Only lattices with at most 3 axes are supported. Beyond 3 axes, an
     arbitrary offset adjacency matrix is no longer guaranteed to
@@ -103,14 +101,3 @@ class Lattice:
             [M for M in matrices if np.array_equal(M.T @ gram2 @ M, gram2)],
             dtype=np.int64,
         )
-
-    @cached_property
-    def neighbor_structure(self) -> np.ndarray:
-        """Boolean (3,)*ndim stencil marking which offsets (in -1/0/1 per
-        axis, indexed 0/1/2) count as adjacent to the center cell.
-        """
-        structure = np.zeros((3,) * self.ndim, dtype=bool)
-        structure[(1,) * self.ndim] = True
-        for v in self.unit_vectors:
-            structure[tuple(v + 1)] = True
-        return structure

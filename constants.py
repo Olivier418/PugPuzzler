@@ -9,15 +9,12 @@ DIFFICULTY_COLORS = {
     "master": "#015DA8",
     "wizard": "#8D398E",
 }
+UNKNOWN_DIFFICULTY_COLOR = "#999999"  # puzzles without a "difficulty" (e.g. the empty boards)
 # The colors for master and wizard are actually swapped in the original IQpuzzler game
 
-MODE_COLORS = {
-    0: "#CCD88B",
-    1: "#FFDD87",
-    2: "#F76773",
-    3: "#B06FC4",
-    4: "#4FA3D1",
-}
+# One color per solver config in plotting.benchmark.plot_benchmark, handed
+# out in the order the configs are plotted (and cycled if there are more).
+CONFIG_PALETTE = ["#4FA3D1", "#F76773", "#FFDD87", "#CCD88B"]
 
 SOLUTION_DIR = "solutions"
 BENCHMARK_DIR = "benchmarks"

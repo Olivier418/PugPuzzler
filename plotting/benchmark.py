@@ -10,21 +10,36 @@ from classes import Puzzle, SolutionBook, Solution
 from classes._utils import _next_free_idx_dir
 from classes.solutions import SolveStats, SolveStatsBook
 from serialization import save_solution_run, load_solution_run
-from constants import MODE_COLORS, BENCHMARK_DIR
-
-name_dct = {
-    0: "no pruning / branching",
-    1: "pruning",
-    2: "branching",
-    3: "board symmetry",
-    4: "region symmetry",
-}
+from constants import CONFIG_PALETTE, BENCHMARK_DIR
 
 
-def _worker(puzzle: Puzzle, mode: int, seed: int, conn):
-    """Runs in a subprocess so a runaway search (e.g. mode=0 on a puzzle
-    with a huge search space) can be killed on a wall-clock deadline --
-    something a plain generator loop in the main process can't do safely.
+# A config is the dict of keyword options handed to the solver (besides the
+# seed). The solver currently has none, so the default is a single empty
+# config; benchmarking a solver variant means adding its options here.
+DEFAULT_CONFIGS = [{}]
+
+ConfigKey = tuple[tuple[str, object], ...]
+
+
+def _config_key(options: dict) -> ConfigKey:
+    """Hashable identity of a config, used to group trials."""
+    return tuple(sorted(options.items()))
+
+
+def _config_label(options: dict) -> str:
+    """Human-readable, filesystem-safe name of a config: its options joined
+    by "+" (`k` for a True flag, `k=v` otherwise); "default" if there are
+    none. Every option is shown, False ones included, so configs that
+    differ only in a switched-off flag still get different labels."""
+    parts = [k if v is True else f"{k}={v}" for k, v in sorted(options.items())]
+    return "+".join(parts) if parts else "default"
+
+
+def _worker(puzzle: Puzzle, config: dict, seed: int, conn):
+    """Runs in a subprocess so a runaway search (e.g. every flag off on a
+    puzzle with a huge search space) can be killed on a wall-clock
+    deadline -- something a plain generator loop in the main process
+    can't do safely.
 
     Deliberately does NOT time itself or check against T: spawning a
     subprocess (reimporting numpy/matplotlib/etc. in the fresh
@@ -41,7 +56,7 @@ def _worker(puzzle: Puzzle, mode: int, seed: int, conn):
     """
     try:
         conn.send(("ready", None))
-        for sol in puzzle.solve(disp=False, mode=mode, seed=seed):
+        for sol in puzzle.solve(disp=False, seed=seed, **config):
             # sol.grid is compact; Solution.grids (and the JSON they get
             # saved as) are full board-shaped, same as Solution.from_puzzle.
             conn.send(("solution", puzzle.setup.expand(sol.grid)))
@@ -52,8 +67,8 @@ def _worker(puzzle: Puzzle, mode: int, seed: int, conn):
         conn.close()
 
 
-def _run_single_test(puzzle: Puzzle, mode: int, seed: int, T: float) -> tuple[SolutionBook, SolveStatsBook]:
-    """One (mode, seed) trial, capped at T seconds. Returns a
+def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> tuple[SolutionBook, SolveStatsBook]:
+    """One (config, seed) trial, capped at T seconds. Returns a
     (SolutionBook, SolveStatsBook) pair, each containing exactly one
     entry for this trial -- reusing the book containers for a single
     puzzle is a bit unusual, but it's what buys us free
@@ -61,7 +76,7 @@ def _run_single_test(puzzle: Puzzle, mode: int, seed: int, T: float) -> tuple[So
     duplicating that tracking in a benchmark-only class.
     """
     parent_conn, child_conn = multiprocessing.Pipe()
-    p = multiprocessing.Process(target=_worker, args=(puzzle, mode, seed, child_conn))
+    p = multiprocessing.Process(target=_worker, args=(puzzle, config, seed, child_conn))
 
     grids: list[np.ndarray] = []
     elapsed: list[float] = []
@@ -93,8 +108,9 @@ def _run_single_test(puzzle: Puzzle, mode: int, seed: int, T: float) -> tuple[So
     # the way the parent/worker clocks did before.
     start_wait = time.perf_counter()
 
+    config_label = _config_label(config)
     if setup_error is not None:
-        print(f"\nWorker error in mode {mode}, seed {seed}: {setup_error}")
+        print(f"\nWorker error in config {config_label}, seed {seed}: {setup_error}")
     else:
         while True:
             if not p.is_alive() and not parent_conn.poll():
@@ -118,7 +134,7 @@ def _run_single_test(puzzle: Puzzle, mode: int, seed: int, T: float) -> tuple[So
             elif status == "done":
                 break
             elif status == "error":
-                print(f"\nWorker error in mode {mode}, seed {seed}: {payload}")
+                print(f"\nWorker error in config {config_label}, seed {seed}: {payload}")
                 break
 
     duration = time.perf_counter() - start_wait
@@ -138,24 +154,24 @@ def _run_single_test(puzzle: Puzzle, mode: int, seed: int, T: float) -> tuple[So
     )
     stats = SolveStats(
         puzzle_name=puzzle.name,
-        mode=mode,
+        options=dict(config),
         seed=seed,
         duration=duration,
         elapsed=elapsed,
     )
     solution_book = SolutionBook(solution, game_name=solution.game_name, book_name=solution.book_name)
-    stats_book = SolveStatsBook(stats, mode=mode, seed=seed)
+    stats_book = SolveStatsBook(stats, options=config, seed=seed)
     return solution_book, stats_book
 
 
 def run_benchmark(
     puzzle: Puzzle,
-    modes: list[int] = [0, 1, 2],
+    configs: list[dict] = DEFAULT_CONFIGS,
     nr_tests: int = 10,
     T: float = 5.0,
     base_folder: str | Path = BENCHMARK_DIR,
-) -> tuple[dict[int, list[SolveStatsBook]], Path]:
-    """Run nr_tests trials (seeds 0..nr_tests-1) of each mode on puzzle,
+) -> tuple[dict[ConfigKey, list[SolveStatsBook]], Path]:
+    """Run nr_tests trials (seeds 0..nr_tests-1) of each config on puzzle,
     each capped at T seconds. Every trial is saved as its own
     solutions.json + stats.json pair under
     base_folder/<game>/<books|puzzles>/<puzzle-or-book_puzzle>/benchmark_<idx>/
@@ -164,48 +180,50 @@ def run_benchmark(
     re-running the same puzzle never overwrites an earlier run and you
     can tell separate simulations apart at a glance.
 
-    Returns the SolveStats side of the results in memory, grouped by
-    mode, so it can go straight into plot_benchmark without a reload --
-    plus the run folder itself, so it can be handed straight to
-    load_benchmark later.
+    Returns the SolveStats side of the results in memory, grouped by config
+    (see _config_key), so it can go straight into plot_benchmark without a
+    reload -- plus the run
+    folder itself, so it can be handed straight to load_benchmark later.
     """
     source = puzzle.source
     puzzle_dir = Path(base_folder) / source.relative_dir() if source else Path(base_folder) / puzzle.name
     puzzle_folder = _next_free_idx_dir(puzzle_dir, prefix="benchmark")
 
-    stats_books: dict[int, list[SolveStatsBook]] = {mode: [] for mode in modes}
-    total_tasks = len(modes) * nr_tests
+    stats_books: dict[ConfigKey, list[SolveStatsBook]] = {
+        _config_key(config): [] for config in configs
+    }
+    total_tasks = len(configs) * nr_tests
 
     with tqdm(total=total_tasks, desc="Benchmarking", unit="run") as pbar:
-        for mode in modes:
-            mode_folder = puzzle_folder / f"mode{mode}"
+        for config in configs:
+            config_folder = puzzle_folder / _config_label(config)
 
             for seed in range(nr_tests):
-                solution_book, stats_book = _run_single_test(puzzle, mode, seed, T)
-                # flat=False: mode/seed folders sit below the puzzle name
-                # here, not directly above an idx, so the usual
+                solution_book, stats_book = _run_single_test(puzzle, config, seed, T)
+                # flat=False: config/seed folders sit below the puzzle
+                # name here, not directly above an idx, so the usual
                 # puzzle-name-from-folder trick (see saving.save_solution_run)
                 # doesn't apply -- keep puzzle_name explicit in the file.
-                save_solution_run(solution_book, stats_book, mode_folder / f"test{seed}", flat=False)
-                stats_books[mode].append(stats_book)
+                save_solution_run(solution_book, stats_book, config_folder / f"test{seed}", flat=False)
+                stats_books[_config_key(config)].append(stats_book)
                 pbar.update(1)
 
     return stats_books, puzzle_folder
 
 
-def load_benchmark(folder: str | Path) -> dict[int, list[SolveStatsBook]]:
+def load_benchmark(folder: str | Path) -> dict[ConfigKey, list[SolveStatsBook]]:
     """Reload a benchmark previously written by run_benchmark, without
     re-solving anything. `folder` is the run's own folder -- the one
-    directly containing mode0/, mode1/, ... -- i.e. exactly the path
+    directly containing each config's subfolder -- i.e. exactly the path
     run_benchmark returned. Mirrors serialization.load_solution_run."""
     puzzle_folder = Path(folder)
 
-    stats_books: dict[int, list[SolveStatsBook]] = {}
-    for mode_folder in sorted(puzzle_folder.glob("mode*")):
-        test_folders = sorted(mode_folder.glob("test*"), key=lambda p: int(p.stem.removeprefix("test")))
+    stats_books: dict[ConfigKey, list[SolveStatsBook]] = {}
+    for config_folder in sorted(p for p in puzzle_folder.iterdir() if p.is_dir()):
+        test_folders = sorted(config_folder.glob("test*"), key=lambda p: int(p.stem.removeprefix("test")))
         for test_folder in test_folders:
             _, stats_book = load_solution_run(test_folder)
-            stats_books.setdefault(stats_book.mode, []).append(stats_book)
+            stats_books.setdefault(_config_key(stats_book.options), []).append(stats_book)
 
     return stats_books
 
@@ -245,7 +263,7 @@ def _poisson_rate(runs: list[tuple[np.ndarray, float]]) -> float:
 
 
 def plot_benchmark(
-    stats_books: dict[int, list[SolveStatsBook]],
+    stats_books: dict[ConfigKey, list[SolveStatsBook]],
     show_trendline: bool = True,
     T: float | None = None,
 ):
@@ -266,9 +284,9 @@ def plot_benchmark(
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    for mode, runs in stats_books.items():
-        c = MODE_COLORS.get(mode, "gray")
-        mode_name = name_dct.get(mode, f"Mode {mode}")
+    for i, (config_key, runs) in enumerate(stats_books.items()):
+        c = CONFIG_PALETTE[i % len(CONFIG_PALETTE)]
+        config_name = _config_label(dict(config_key))
 
         grid_counts = []
         fit_runs: list[tuple[np.ndarray, float]] = []
@@ -309,7 +327,7 @@ def plot_benchmark(
                 ax.plot(time_grid, rate_estimate * time_grid, color=c, linestyle='--', alpha=0.7, label='_nolegend_')
                 final_max_y = max(final_max_y, rate_estimate * B)
 
-        legend_label = f"{mode_name} ({rate_estimate:.2f} solutions/s)"
+        legend_label = f"{config_name} ({rate_estimate:.2f} solutions/s)"
         ax.plot(time_grid, avg_counts, color=c, alpha=1.0, linewidth=2, label=legend_label)
 
     ax.set_xlim(0, B)

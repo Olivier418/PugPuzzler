@@ -56,7 +56,7 @@ class Setup:
         """(n_cells, ndim) lattice coordinates of every compact cell --
         the inverse view of compact_to_flat, unravelled back into board
         coordinates. Cached because the symmetry search below runs on it
-        at every node of a mode-4 solve."""
+        once per queried region."""
         return np.stack(
             np.unravel_index(self.compact_to_flat, self.board.cells.shape), axis=-1
         )
@@ -131,7 +131,7 @@ class Setup:
         passing a solver node's still-open cells gives that leftover
         shape's own symmetries, which are generally *not* restrictions of
         any whole-board symmetry -- a symmetric pocket left in an
-        otherwise asymmetric board is the whole point of Solver's mode 4.
+        otherwise asymmetric board (see SYMMETRY_NOTES.md).
 
         Only the lattice's point group has to be searched, not point
         group x translations: a finite region admits no nontrivial
@@ -141,12 +141,12 @@ class Setup:
         one translation t with M(region) + t == region. Lining up the two
         shapes' lexicographically smallest cells recovers it directly.
 
-        Mode 4 calls this at (almost) every search node, so it is written
-        as a handful of integer array ops over precomputed tables (see
-        _symmetry_tables) covering the whole point group at once, rather
-        than a loop doing coordinate arithmetic per matrix. The common
-        result by far is "no symmetry", which costs one gather, one
-        shift and one membership test.
+        It is meant to be called at (almost) every search node, so it is
+        written as a handful of integer array ops over precomputed
+        tables (see _symmetry_tables) covering the whole point group at
+        once, rather than a loop doing coordinate arithmetic per matrix.
+        The common result by far is "no symmetry", which costs one
+        gather, one shift and one membership test.
         """
         idx = np.flatnonzero(region)
         if idx.size <= 1:
@@ -202,15 +202,13 @@ class Setup:
     def board_symmetries(self) -> list[np.ndarray]:
         """The whole board's own symmetries -- region_symmetries applied
         to every cell. Geometry-only (independent of blocks or
-        placements) and needed at every node of a mode-3 solve, so it's
-        cached here alongside placements rather than recomputed by the
-        solver.
+        placements) and cached here alongside placements for cheap
+        reuse.
 
-        Used by Solver's mode 3: at a given search node, the subgroup of
-        these that also fixes every already-decided cell in place tells
-        it which remaining branches are mirror/rotation images of one
-        another, so only one needs to be searched. Mode 4 calls
-        region_symmetries directly on the open region instead.
+        Not consumed by Solver (the solver has no symmetry support at the
+        moment -- see SYMMETRY_NOTES.md); kept as the whole-board special
+        case of region_symmetries for callers -- e.g. test_symmetry.py's
+        geometry checks -- that want it on its own.
         """
         return self.region_symmetries(np.ones(self.n_cells, dtype=bool))
 
@@ -411,12 +409,15 @@ class State:
             clone.name = rename
         return clone
 
-    def solve(self, mode: int = 2, seed: int = None, disp: bool = False):
+    def solve(self, seed: int = None, disp: bool = False, **options):
         """Solve this game/puzzle, yielding each solution as its own Game
         (or Puzzle) copy, fully placed -- grid and chosen_placement_idx
-        both correct and consistent, same as any other Game."""
+        both correct and consistent, same as any other Game.
+
+        `seed` randomises the order solutions are found in (never which
+        ones); `options` are forwarded to Solver.solve as-is."""
         solver = Solver(self)
-        for sol_idx, sol in enumerate(solver.solve(mode=mode, seed=seed)):
+        for sol_idx, sol in enumerate(solver.solve(seed=seed, **options)):
             if hasattr(sol, "name"):
                 sol.name = f"{self.name} (solution {sol_idx + 1})"
             if disp:

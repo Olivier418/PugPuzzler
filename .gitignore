@@ -1,2 +1,2 @@
-/benchmark_results
-/__pycache__
+__pycache__/
+*.pyc

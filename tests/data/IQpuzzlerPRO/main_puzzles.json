@@ -1,0 +1,362 @@
+{
+  "1": [
+    [
+      ["EAAAABGGGCC",
+       "EEKABBGLLLC",
+       "HEKKDBBLFLC",
+       "HEKIDDJJFFC",
+       "HHHIIDJJJFF"]
+    ]
+  ],
+  "2": [
+    [
+      ["GGDEAAAALLL",
+       "GDDECCABLKL",
+       "GDFEECBBKKH",
+       "JJFFECIBBKH",
+       "JJJFFCIIHHH"]
+    ]
+  ],
+  "3": [
+    [
+      ["IAAAAEKKKDD",
+       "IIAFBEEKDDJ",
+       "LLFFBBEGHJJ",
+       "LFFBBCEGHJJ",
+       "LLCCCCGGHHH"]
+    ]
+  ],
+  "4": [
+    [
+      ["KKKFALLBBEG",
+       "HKFFALBBEEG",
+       "HFFAALLBEGG",
+       "HHHCADDIEJJ",
+       "CCCCDDIIJJJ"]
+    ]
+  ],
+  "5": [
+    [
+      ["DDJJJECCHHH",
+       "KDDJJECLLLH",
+       "KKFGEECLBLH",
+       "KFFGEACBBII",
+       "FFGGAAAABBI"]
+    ]
+  ],
+  "6": [
+    [
+      ["LLAHHHGGFFK",
+       "LAAAAHGFFKK",
+       "LLEEEHGFBDK",
+       "CEEIIJJBBDD",
+       "CCCCIJJJBBD"]
+    ]
+  ],
+  "7": [
+    [
+      ["JJKKKBEEHHH",
+       "JJJKBBBEEEH",
+       "LLLDGGBIFFH",
+       "LALDDGCIIFF",
+       "AAAADGCCCCF"]
+    ]
+  ],
+  "8": [
+    [
+      ["LLLEGGHHHDD",
+       "LBLEEGHFDDK",
+       "BBBIEGHFFKK",
+       "BAIIEJJCFFK",
+       "AAAAJJJCCCC"]
+    ]
+  ],
+  "9": [
+    [
+      ["HHHIKKKCCCC",
+       "HEFIIKDDBBC",
+       "HEFFGGJDDBB",
+       "EEAFFGJJLBL",
+       "EAAAAGJJLLL"]
+    ]
+  ],
+  "10": [
+    [
+      ["AECCIILLLJJ",
+       "AEECIDLFLJJ",
+       "AAECBDDFFJH",
+       "AKECBBDGFFH",
+       "KKKBBGGGHHH"]
+    ]
+  ],
+  "11": [
+    [
+      ["AAAAGGDDHHH",
+       "BACCGDDJJEH",
+       "BBBCGFFJJEH",
+       "LBLCFFIJKEE",
+       "LLLCFIIKKKE"]
+    ]
+  ],
+  "12": [
+    [
+      ["JJJHHHGGGEE",
+       "AJJFFHGEEED",
+       "AAFFBHKKKDD",
+       "ACFBBBIKLDL",
+       "ACCCCBIILLL"]
+    ]
+  ],
+  "13": [
+    [
+      ["LLDDKKKJJJA",
+       "LDDBBKGGJJA",
+       "LLEEBBHGFAA",
+       "EEECBIHGFFA",
+       "CCCCIIHHHFF"]
+    ]
+  ],
+  "14": [
+    [
+      ["JJKLLHHHACC",
+       "JJKKLHAAAAC",
+       "JFKLLHBGGGC",
+       "IFFDDBBEEGC",
+       "IIFFDDBBEEE"]
+    ]
+  ],
+  "15": [
+    [
+      ["BBLLAIIFFGG",
+       "HBBLAIEDFFG",
+       "HBLLAAEDDFG",
+       "HHHCAKEEDJJ",
+       "CCCCKKKEJJJ"]
+    ]
+  ],
+  "16": [
+    [
+      ["ECCAIKKKBLL",
+       "EECAIIKBBBL",
+       "HECAAFGBDLL",
+       "HECAFFGDDJJ",
+       "HHHFFGGDJJJ"]
+    ]
+  ],
+  "17": [
+    [
+      ["DDEEEGGLLBB",
+       "KDDCEEGLBBA",
+       "KKFCHIGLLBA",
+       "KFFCHIIJJAA",
+       "FFCCHHHJJJA"]
+    ]
+  ],
+  "18": [
+    [
+      ["EKKKFAAAACC",
+       "EEKFFBBAIIC",
+       "HEFFBBGLLIC",
+       "HEJJJBGLDDC",
+       "HHHJJGGLLDD"]
+    ]
+  ],
+  "19": [
+    [
+      ["LLLJJJGGFFE",
+       "LBLAJJGFFEE",
+       "BBAAAAGFDEH",
+       "CBBKKKIDDEH",
+       "CCCCKIIDHHH"]
+    ]
+  ],
+  "20": [
+    [
+      ["KAAAAHHHLLL",
+       "KKBAGGGHLIL",
+       "KBBBFFGHDII",
+       "CBEEEFFDDJJ",
+       "CCCCEEFDJJJ"]
+    ]
+  ],
+  "21": [
+    [
+      ["AFIILLLJJJD",
+       "AFFILGLJJDD",
+       "AAFFBGEEEDH",
+       "AKBBBGGCEEH",
+       "KKKBCCCCHHH"]
+    ]
+  ],
+  "22": [
+    [
+      ["LLFFCCCCHHH",
+       "LDDFFEKCHGG",
+       "LLDDFEKKHBG",
+       "JJJIEEKABBG",
+       "JJIIEAAAABB"]
+    ]
+  ],
+  "23": [
+    [
+      ["HHHKIIDAAAA",
+       "HCKKKIDDLAL",
+       "HCCCCBFDLLL",
+       "GEEEBBFFJJJ",
+       "GGGEEBBFFJJ"]
+    ]
+  ],
+  "24": [
+    [
+      ["DEEGGGAAAAI",
+       "DDEEEGCFAII",
+       "HDBCCCCFFLL",
+       "HBBBJJJKFFL",
+       "HHHBJJKKKLL"]
+    ]
+  ],
+  "25": [
+    [
+      ["EIIFFAAAAJJ",
+       "EILLFFABJJJ",
+       "EELDDFHBBBK",
+       "CELLDDHGBKK",
+       "CCCCHHHGGGK"]
+    ]
+  ],
+  "26": [
+    [
+      ["AAAAFFJIIGG",
+       "DDAFFJJCIKG",
+       "HDDFBJJCKKG",
+       "HEEEBBBCLKL",
+       "HHHEEBCCLLL"]
+    ]
+  ],
+  "27": [
+    [
+      ["DEEAAAACCCC",
+       "DDEEEAIIFJC",
+       "KDBLLHIFFJJ",
+       "KKBBLHFFGJJ",
+       "KBBLLHHHGGG"]
+    ]
+  ],
+  "28": [
+    [
+      ["DIIGGGEEHHH",
+       "DDIGEEEFHCC",
+       "JDLLBBFFHKC",
+       "JJLBBFFAKKC",
+       "JJLLBAAAAKC"]
+    ]
+  ],
+  "29": [
+    [
+      ["IILLLJJJBBD",
+       "FILKLJJBBDD",
+       "FFKKKEEEBDH",
+       "GFFCEEAAAAH",
+       "GGGCCCCAHHH"]
+    ]
+  ],
+  "30": [
+    [
+      ["HHHIIJJJECC",
+       "HGGGIJJKEEC",
+       "HFFGBLLKKEC",
+       "FFDDBBLKAEC",
+       "FDDBBLLAAAA"]
+    ]
+  ],
+  "31": [
+    [
+      ["AAAALLHHHGG",
+       "JJAFFLIIHEG",
+       "JJFFLLIBHEG",
+       "CJFDDBBBKEE",
+       "CCCCDDBKKKE"]
+    ]
+  ],
+  "32": [
+    [
+      ["JJAAAAIIEEE",
+       "JJJADDIEEFF",
+       "LLBBGDDHFFK",
+       "LBBCGGGHFKK",
+       "LLBCCCCHHHK"]
+    ]
+  ],
+  "33": [
+    [
+      ["JJJDKKKCCCC",
+       "JJBDDKAAAAC",
+       "BBBHDGGGAFF",
+       "LBLHEEEGFFI",
+       "LLLHHHEEFII"]
+    ]
+  ],
+  "34": [
+    [
+      ["GGGCCCCKKKD",
+       "LLGEEJCFKDD",
+       "LEEEBJJFFDH",
+       "LLABBJJIFFH",
+       "AAAABBIIHHH"]
+    ]
+  ],
+  "35": [
+    [
+      ["JJLLLIIBDCC",
+       "JJLHLIBBDDC",
+       "JFFHGGGBBDC",
+       "FFAHHHGEEKC",
+       "FAAAAEEEKKK"]
+    ]
+  ],
+  "36": [
+    [
+      ["EEEKKKFFLLL",
+       "IIEEKFFBLHL",
+       "IDJJJFBBBHG",
+       "DDAJJCBHHHG",
+       "DAAAACCCCGG"]
+    ]
+  ],
+  "37": [
+    [
+      ["GHHHLLBBDJJ",
+       "GGGHLBBDDJJ",
+       "IICHLLBDFFJ",
+       "IACCCCEEKFF",
+       "AAAAEEEKKKF"]
+    ]
+  ],
+  "38": [
+    [
+      ["GJJJEEEBHHH",
+       "GJJEELLBBBH",
+       "GGAAAALFBDH",
+       "IIKACLLFFDD",
+       "IKKKCCCCFFD"]
+    ]
+  ],
+  "39": [
+    [
+      ["GGGJJJDDHHH",
+       "IIGJJFFDDKH",
+       "IBCCCCFFKKH",
+       "BBBEECAFLKL",
+       "BEEEAAAALLL"]
+    ]
+  ],
+  "40": [
+    [
+      ["JKKKEEEBHHH",
+       "JJKEEBBBLLH",
+       "JJAAAABFFLH",
+       "IIDDAGFFLLC",
+       "IDDGGGFCCCC"]
+    ]
+  ]
+}

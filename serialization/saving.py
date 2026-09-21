@@ -6,6 +6,9 @@ import numpy as np
 from classes import SolutionBook, Solution
 from classes._utils import _next_free_idx_dir
 from classes.solutions import SolveStats, SolveStatsBook
+from constants import GAMES_DIR, OUTSIDE_BOARD
+from .jsonio import dump_json, letter_grid_to_rows, parse_letter_grid
+from .loading import load_blocks
 
 
 def _write_solutions(solution_book: SolutionBook, file_path: Path, flat: bool = True) -> None:
@@ -15,7 +18,8 @@ def _write_solutions(solution_book: SolutionBook, file_path: Path, flat: bool = 
     be a second copy of the same strings that could drift from the path.
 
     A solutions.json holds nothing but grids (or, for a multi-puzzle
-    save, puzzle_name+grids pairs) -- there's no sibling metadata to
+    save, puzzle_name+grids pairs), written as letters -- one string per
+    row, see _grids_to_rows -- so it can be read by eye. There's no sibling metadata to
     justify wrapping that in an object, so the file's top level is the
     list itself.
 
@@ -35,17 +39,52 @@ def _write_solutions(solution_book: SolutionBook, file_path: Path, flat: bool = 
                 "Use flat=False for a multi-puzzle save."
             )
         sol = next(iter(solution_book.values()))
-        data = [grid.tolist() for grid in sol.grids]
+        data = _grids_to_rows(sol)
     else:
         data = [
-            {
-                "puzzle_name": sol.puzzle_name,
-                "grids": [grid.tolist() for grid in sol.grids],
-            }
+            {"puzzle_name": sol.puzzle_name, "grids": _grids_to_rows(sol)}
             for sol in solution_book.values()
         ]
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=2)
+    dump_json(data, file_path)
+
+
+def _grids_to_rows(sol: Solution) -> list:
+    """A Solution's grids as letter rows (see letter_grid_to_rows): each
+    block index becomes its block's letter, anything else (the cells
+    outside a non-rectangular board or a pyramid's upper layers) a space.
+    The blocks come from the live puzzle if there is one, else from the
+    game's blocks.json."""
+    if not sol.grids:
+        return []
+    blocks = sol.puzzle.blocks if sol.puzzle is not None else _game_blocks(sol.game_name)
+    rows = []
+    for grid in sol.grids:
+        letters = np.full(grid.shape, " ", dtype="<U1")
+        for idx, block in blocks.items():
+            letters[grid == idx] = block.letter
+        rows.append(letter_grid_to_rows(letters))
+    return rows
+
+
+def _rows_to_grid(rows: list, blocks) -> np.ndarray:
+    """Inverse of _grids_to_rows for one grid: letters -> block indices,
+    spaces -> OUTSIDE_BOARD."""
+    letters = parse_letter_grid(rows).T
+    grid = np.full(letters.shape, OUTSIDE_BOARD, dtype=int)
+    for idx, block in blocks.items():
+        grid[letters == block.letter] = idx
+    return grid
+
+
+def _game_blocks(game_name: str | None):
+    """The blocks a solutions file's letters refer to. The game is known
+    only from the folder the file sits in (see _game_book_from_run_dir)."""
+    if game_name is None:
+        raise ValueError(
+            "Cannot tell which game's blocks the letters in this solutions file refer to: "
+            "its folder doesn't follow <game>/(books|puzzles)/..."
+        )
+    return load_blocks(Path(GAMES_DIR) / game_name / "blocks.json")
 
 
 def save_solutions(solution_book: SolutionBook, file_path: str | Path) -> Path:
@@ -75,19 +114,19 @@ def _write_solve_stats(stats_book: SolveStatsBook, file_path: Path, flat: bool =
             )
         stats = next(iter(stats_book.values()))
         data = {
-            "mode": stats_book.mode,
+            "options": stats_book.options,
             "seed": stats_book.seed,
             "duration": stats.duration,
             "elapsed": stats.elapsed,
         }
     else:
         data = {
-            "mode": stats_book.mode,
+            "options": stats_book.options,
             "seed": stats_book.seed,
             "puzzles": [
                 {
                     "puzzle_name": stats.puzzle_name,
-                    "mode": stats.mode,
+                    "options": stats.options,
                     "seed": stats.seed,
                     "duration": stats.duration,
                     "elapsed": stats.elapsed,
@@ -149,7 +188,7 @@ def _game_book_from_run_dir(file_path: Path) -> tuple[str | None, str | None]:
     following the <game>/(books/<book>[/<puzzle>]|puzzles/<puzzle>)/<idx>
     convention every solutions/ writer here uses -- the inverse of
     Source.relative_dir(). Returns (None, None) for a folder that
-    doesn't follow it (e.g. plotting.benchmark's nested mode/seed
+    doesn't follow it (e.g. plotting.benchmark's nested config/seed
     layout), where callers already have puzzle_name explicit in the
     JSON and don't need this."""
     parts = file_path.parts
@@ -183,24 +222,20 @@ def _read_solutions(path: str | Path) -> tuple[list[Solution], dict]:
     game_name, book_name = _game_book_from_run_dir(file_path)
 
     if data and isinstance(data[0], dict):
-        solutions = [
-            Solution(
-                puzzle_name=item["puzzle_name"],
-                grids=[np.array(grid, dtype=int) for grid in item["grids"]],
-                game_name=game_name,
-                book_name=book_name,
-            )
-            for item in data
-        ]
+        entries = [(item["puzzle_name"], item["grids"]) for item in data]
     else:
-        solutions = [
-            Solution(
-                puzzle_name=_puzzle_name_from_run_dir(file_path),
-                grids=[np.array(grid, dtype=int) for grid in data],
-                game_name=game_name,
-                book_name=book_name,
-            )
-        ]
+        entries = [(_puzzle_name_from_run_dir(file_path), data)]
+
+    blocks = _game_blocks(game_name) if any(rows for _, rows in entries) else None
+    solutions = [
+        Solution(
+            puzzle_name=puzzle_name,
+            grids=[_rows_to_grid(grid, blocks) for grid in grids],
+            game_name=game_name,
+            book_name=book_name,
+        )
+        for puzzle_name, grids in entries
+    ]
 
     meta = {
         "game_name": game_name,
@@ -232,6 +267,25 @@ def load_solution(path: str | Path) -> Solution:
     return solutions[0]
 
 
+# Solver flags that older stats.json files recorded as top-level keys before
+# they became the generic "options" dict; folded back into it on load so old
+# runs (and benchmark folders) still load, and still tell configs apart.
+_LEGACY_OPTION_KEYS = ("partition_pruning", "partition_branching", "symmetry_branching")
+
+
+def _read_options(data: dict, default: dict | None = None) -> dict:
+    """The solver options recorded in a stats.json (or one puzzle's entry
+    in it): the "options" dict if present, else any legacy flag keys, else
+    `default` (the book-level value, for a per-puzzle entry that has none
+    of its own)."""
+    if "options" in data:
+        return dict(data["options"])
+    legacy = {k: data[k] for k in _LEGACY_OPTION_KEYS if k in data}
+    if legacy:
+        return legacy
+    return dict(default or {})
+
+
 def _read_solve_stats(path: str | Path) -> tuple[list[SolveStats], dict]:
     """Parse a stats.json into its SolveStats plus the book-level
     metadata -- mirrors _read_solutions."""
@@ -242,14 +296,14 @@ def _read_solve_stats(path: str | Path) -> tuple[list[SolveStats], dict]:
         data = json.load(f)
 
     game_name, book_name = _game_book_from_run_dir(file_path)
-    book_mode = data.get("mode", 2)
+    book_options = _read_options(data)
     book_seed = data.get("seed")
 
     if "puzzles" in data:
         stats = [
             SolveStats(
                 puzzle_name=item["puzzle_name"],
-                mode=item.get("mode", book_mode),
+                options=_read_options(item, default=book_options),
                 seed=item.get("seed", book_seed),
                 duration=item["duration"],
                 elapsed=item["elapsed"],
@@ -260,7 +314,7 @@ def _read_solve_stats(path: str | Path) -> tuple[list[SolveStats], dict]:
         stats = [
             SolveStats(
                 puzzle_name=_puzzle_name_from_run_dir(file_path),
-                mode=book_mode,
+                options=book_options,
                 seed=book_seed,
                 duration=data["duration"],
                 elapsed=data["elapsed"],
@@ -270,7 +324,7 @@ def _read_solve_stats(path: str | Path) -> tuple[list[SolveStats], dict]:
     meta = {
         "game_name": game_name,
         "book_name": book_name,
-        "mode": book_mode,
+        "options": book_options,
         "seed": book_seed,
     }
     return stats, meta

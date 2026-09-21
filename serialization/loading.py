@@ -8,6 +8,7 @@ from classes import Setup, Game, Puzzle, PuzzleBook, Block, BlockCollection, Boa
 from classes.source import Source
 from classes.solutions import PuzzleInfo
 from constants import GAMES_DIR
+from .jsonio import parse_letter_grid, letter_grid_to_rows
 
 
 def load_blocks(json_path: Path | str) -> BlockCollection:
@@ -46,13 +47,14 @@ def _cells_from_json(raw_cells: list) -> np.ndarray:
     which unpacks width, depth = shape[0], shape[1]).
 
     'cells' is authored the same human-readable way as a Puzzle letter
-    grid: one JSON row per depth position, `width` entries per row -- i.e.
-    literally shape (depth, width) as written. Puzzle._initialize_grid
+    grid: one row string per depth position ("X" = board cell, " " = not),
+    `width` characters per row -- i.e. literally shape (depth, width) as
+    written. Puzzle._initialize_grid
     already transposes a letter grid for exactly this reason; board cells
     need the identical, one-time transpose here, at the JSON boundary,
     rather than compensating for it downstream.
     """
-    return np.array(raw_cells, dtype=bool).T
+    return (parse_letter_grid(raw_cells) == "X").T
 
 
 def _parse_board(data: dict) -> Board:
@@ -77,8 +79,9 @@ def _parse_board(data: dict) -> Board:
     raise ValueError(f"Unsupported board type: '{board_type}'")
 
 
-def grid_to_letter_rows(setup: Setup, grid: np.ndarray, empty: str = " ") -> list[list[str]]:
-    """Inverse of Puzzle._initialize_grid: numeric grid -> row-major letters.
+def grid_to_letter_rows(setup: Setup, grid: np.ndarray, empty: str = " ") -> list:
+    """Inverse of Puzzle._initialize_grid: numeric grid -> one string per
+    row (a list of those per layer on a pyramid).
 
     `grid` is compact (see Setup.__init__); expanded to the full board
     shape here since the JSON 'grid' convention is full-shape, human-
@@ -87,7 +90,7 @@ def grid_to_letter_rows(setup: Setup, grid: np.ndarray, empty: str = " ") -> lis
     letter_arr = np.full(full_grid.shape, empty, dtype="<U1")
     for idx, block in setup.blocks.items():
         letter_arr[full_grid == idx] = block.letter
-    return letter_arr.T.tolist()  # undo the transpose applied on load
+    return letter_grid_to_rows(letter_arr)  # also undoes the transpose applied on load
 
 
 def load_game(dir_path: Path | str) -> Game:
@@ -130,7 +133,7 @@ def load_game(dir_path: Path | str) -> Game:
             puzzles = [
                 Puzzle(
                     setup,
-                    np.array(item["grid"], dtype=str) if "grid" in item else None,
+                    parse_letter_grid(item["grid"]) if "grid" in item else None,
                     name=item["name"],
                     difficulty=item.get("difficulty"),
                 )
@@ -157,7 +160,7 @@ def load_game(dir_path: Path | str) -> Game:
 
             board_key = item.get("board", "main")
             setup = setups[board_key]
-            grid = np.array(item["grid"], dtype=str) if "grid" in item else None
+            grid = parse_letter_grid(item["grid"]) if "grid" in item else None
             name = json_file.stem
 
             puzzle = Puzzle(
@@ -248,7 +251,7 @@ def load_puzzle_info_for_puzzle(
     difficulty = item.get("difficulty")
 
     if "grid" in item:
-        grid = np.array(item["grid"], dtype=str)
+        grid = parse_letter_grid(item["grid"])
         nr_empty_spaces = int((grid == " ").sum())
     else:
         boards = load_boards(game_dir / "boards.json")

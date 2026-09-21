@@ -1,0 +1,370 @@
+{
+  "options": {},
+  "seed": null,
+  "puzzles": [
+    {
+      "puzzle_name": "81",
+      "options": {},
+      "seed": null,
+      "duration": 0.0035226999898441136,
+      "elapsed": [
+        0.003513399977236986
+      ]
+    },
+    {
+      "puzzle_name": "82",
+      "options": {},
+      "seed": null,
+      "duration": 0.003220000013243407,
+      "elapsed": [
+        0.0032112000044435263
+      ]
+    },
+    {
+      "puzzle_name": "83",
+      "options": {},
+      "seed": null,
+      "duration": 0.003218500001821667,
+      "elapsed": [
+        0.0032075000344775617
+      ]
+    },
+    {
+      "puzzle_name": "84",
+      "options": {},
+      "seed": null,
+      "duration": 0.003397699969355017,
+      "elapsed": [
+        0.0032922999816946685
+      ]
+    },
+    {
+      "puzzle_name": "85",
+      "options": {},
+      "seed": null,
+      "duration": 0.005337100010365248,
+      "elapsed": [
+        0.005298700009007007
+      ]
+    },
+    {
+      "puzzle_name": "86",
+      "options": {},
+      "seed": null,
+      "duration": 0.004681600024923682,
+      "elapsed": [
+        0.0046678000362589955
+      ]
+    },
+    {
+      "puzzle_name": "87",
+      "options": {},
+      "seed": null,
+      "duration": 0.0037125000380910933,
+      "elapsed": [
+        0.003466100024525076
+      ]
+    },
+    {
+      "puzzle_name": "88",
+      "options": {},
+      "seed": null,
+      "duration": 0.010608100041281432,
+      "elapsed": [
+        0.010441099992021918
+      ]
+    },
+    {
+      "puzzle_name": "89",
+      "options": {},
+      "seed": null,
+      "duration": 0.0052782000275328755,
+      "elapsed": [
+        0.005262400023639202
+      ]
+    },
+    {
+      "puzzle_name": "90",
+      "options": {},
+      "seed": null,
+      "duration": 0.004934099968522787,
+      "elapsed": [
+        0.0049223999958485365
+      ]
+    },
+    {
+      "puzzle_name": "91",
+      "options": {},
+      "seed": null,
+      "duration": 0.006878499989397824,
+      "elapsed": [
+        0.006722900026943535
+      ]
+    },
+    {
+      "puzzle_name": "92",
+      "options": {},
+      "seed": null,
+      "duration": 0.007626199978403747,
+      "elapsed": [
+        0.007355799956712872
+      ]
+    },
+    {
+      "puzzle_name": "93",
+      "options": {},
+      "seed": null,
+      "duration": 0.009523599990643561,
+      "elapsed": [
+        0.00804660003632307
+      ]
+    },
+    {
+      "puzzle_name": "94",
+      "options": {},
+      "seed": null,
+      "duration": 0.005667400022502989,
+      "elapsed": [
+        0.005526499997358769
+      ]
+    },
+    {
+      "puzzle_name": "95",
+      "options": {},
+      "seed": null,
+      "duration": 0.007289300032425672,
+      "elapsed": [
+        0.00641829997766763
+      ]
+    },
+    {
+      "puzzle_name": "96",
+      "options": {},
+      "seed": null,
+      "duration": 0.00890429998980835,
+      "elapsed": [
+        0.0084762999904342
+      ]
+    },
+    {
+      "puzzle_name": "97",
+      "options": {},
+      "seed": null,
+      "duration": 0.008129000023473054,
+      "elapsed": [
+        0.007136500033084303
+      ]
+    },
+    {
+      "puzzle_name": "98",
+      "options": {},
+      "seed": null,
+      "duration": 0.0044584000133909285,
+      "elapsed": [
+        0.0041520000086165965
+      ]
+    },
+    {
+      "puzzle_name": "99",
+      "options": {},
+      "seed": null,
+      "duration": 0.005734100006520748,
+      "elapsed": [
+        0.00453069998184219
+      ]
+    },
+    {
+      "puzzle_name": "100",
+      "options": {},
+      "seed": null,
+      "duration": 0.006862500042188913,
+      "elapsed": [
+        0.005426999996416271
+      ]
+    },
+    {
+      "puzzle_name": "101",
+      "options": {},
+      "seed": null,
+      "duration": 0.003666599979624152,
+      "elapsed": [
+        0.0036515999818220735
+      ]
+    },
+    {
+      "puzzle_name": "102",
+      "options": {},
+      "seed": null,
+      "duration": 0.00449670001398772,
+      "elapsed": [
+        0.0036225999938324094
+      ]
+    },
+    {
+      "puzzle_name": "103",
+      "options": {},
+      "seed": null,
+      "duration": 0.005340799980331212,
+      "elapsed": [
+        0.005322399956639856
+      ]
+    },
+    {
+      "puzzle_name": "104",
+      "options": {},
+      "seed": null,
+      "duration": 0.014318100002128631,
+      "elapsed": [
+        0.007339200004935265
+      ]
+    },
+    {
+      "puzzle_name": "105",
+      "options": {},
+      "seed": null,
+      "duration": 0.022423699963837862,
+      "elapsed": [
+        0.01782080001430586
+      ]
+    },
+    {
+      "puzzle_name": "106",
+      "options": {},
+      "seed": null,
+      "duration": 0.004378499987069517,
+      "elapsed": [
+        0.003938700014259666
+      ]
+    },
+    {
+      "puzzle_name": "107",
+      "options": {},
+      "seed": null,
+      "duration": 0.015130399959161878,
+      "elapsed": [
+        0.011952699976973236
+      ]
+    },
+    {
+      "puzzle_name": "108",
+      "options": {},
+      "seed": null,
+      "duration": 0.013375199981965125,
+      "elapsed": [
+        0.011188099975697696
+      ]
+    },
+    {
+      "puzzle_name": "109",
+      "options": {},
+      "seed": null,
+      "duration": 0.047420699964277446,
+      "elapsed": [
+        0.012254200002644211
+      ]
+    },
+    {
+      "puzzle_name": "110",
+      "options": {},
+      "seed": null,
+      "duration": 0.14442539995070547,
+      "elapsed": [
+        0.12976209999760613
+      ]
+    },
+    {
+      "puzzle_name": "111",
+      "options": {},
+      "seed": null,
+      "duration": 0.14171339996391907,
+      "elapsed": [
+        0.11868630000390112
+      ]
+    },
+    {
+      "puzzle_name": "112",
+      "options": {},
+      "seed": null,
+      "duration": 0.1021411000401713,
+      "elapsed": [
+        0.06821500003570691
+      ]
+    },
+    {
+      "puzzle_name": "113",
+      "options": {},
+      "seed": null,
+      "duration": 0.33711249998304993,
+      "elapsed": [
+        0.08366030000615865
+      ]
+    },
+    {
+      "puzzle_name": "114",
+      "options": {},
+      "seed": null,
+      "duration": 0.8252978000091389,
+      "elapsed": [
+        0.7610491999657825
+      ]
+    },
+    {
+      "puzzle_name": "115",
+      "options": {},
+      "seed": null,
+      "duration": 0.039766899950336665,
+      "elapsed": [
+        0.022705799958202988
+      ]
+    },
+    {
+      "puzzle_name": "116",
+      "options": {},
+      "seed": null,
+      "duration": 0.8582883999915794,
+      "elapsed": [
+        0.8012509999680333
+      ]
+    },
+    {
+      "puzzle_name": "117",
+      "options": {},
+      "seed": null,
+      "duration": 2.9771918000187725,
+      "elapsed": [
+        1.9334424000116996
+      ]
+    },
+    {
+      "puzzle_name": "118",
+      "options": {},
+      "seed": null,
+      "duration": 1.8967483000014909,
+      "elapsed": [
+        1.4746807000483386
+      ]
+    },
+    {
+      "puzzle_name": "119",
+      "options": {},
+      "seed": null,
+      "duration": 2.2322425000020303,
+      "elapsed": [
+        1.5370324000250548
+      ]
+    },
+    {
+      "puzzle_name": "120",
+      "options": {},
+      "seed": null,
+      "duration": 1.8713076999993064,
+      "elapsed": [
+        0.09473670000443235,
+        0.1597384000197053,
+        1.2464945000247099,
+        1.4054803000180982,
+        1.4111890000058338
+      ]
+    }
+  ]
+}

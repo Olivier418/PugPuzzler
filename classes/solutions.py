@@ -18,10 +18,13 @@ class PuzzleInfo(NamedTuple):
 class SolveStats(NamedTuple):
     """Metadata about the solver run that produced a Solution -- kept
     separate from Solution itself since the solver is exhaustive: the
-    solutions are deterministic, but how long it took / what mode+seed
-    were used is a property of the run, not of the solutions."""
+    solutions are deterministic, but how long it took / which solver
+    options+seed were used is a property of the run, not of the
+    solutions. `options` is whatever keyword arguments the solver was
+    given besides the seed (currently none; kept so runs of different
+    solver variants can be told apart and compared by plotting.benchmark)."""
     puzzle_name: str
-    mode: int
+    options: dict
     seed: int | None
     duration: float
     elapsed: list[float]  # per-solution elapsed time, same order/index as the matching Solution.grids
@@ -72,12 +75,12 @@ class Solution:
     def from_puzzle(
         cls,
         puzzle,
-        mode: int = 2,
         seed: int = None,
         disp: bool = False,
         save: bool = True,
         path: str | Path = None,
         solutions_root: str | Path = SOLUTION_DIR,
+        **options,
     ) -> tuple["Solution", SolveStats]:
         """Solve a single Puzzle and, by default, save the results and
         the run's SolveStats to a folder mirroring where the Puzzle
@@ -86,12 +89,13 @@ class Solution:
         solutions/IQpuzzler/puzzles/main_empty/<idx>/{solutions,stats}.json).
 
         Pass `save=False` to just solve, or `path=` to save somewhere
-        specific instead of the mirrored default.
+        specific instead of the mirrored default. `options` are forwarded
+        to the solver and recorded in the SolveStats.
         """
         start = time.perf_counter()
         grids = []
         elapsed = []
-        for state in puzzle.solve(mode=mode, seed=seed, disp=disp):
+        for state in puzzle.solve(seed=seed, disp=disp, **options):
             # Solution.grids are kept full board-shaped (matching the
             # on-disk format) even though State.grid itself is compact --
             # expanding here, once per solution, keeps every other reader
@@ -110,7 +114,7 @@ class Solution:
         )
         stats = SolveStats(
             puzzle_name=puzzle.name,
-            mode=mode,
+            options=options,
             seed=seed,
             duration=duration,
             elapsed=elapsed,
@@ -121,7 +125,13 @@ class Solution:
 
             target = Path(path) if path is not None else _next_run_dir(source, solutions_root)
             solution_book = SolutionBook(solution, game_name=solution.game_name, book_name=solution.book_name)
-            stats_book = SolveStatsBook(stats, game_name=solution.game_name, book_name=solution.book_name, mode=mode, seed=seed)
+            stats_book = SolveStatsBook(
+                stats,
+                game_name=solution.game_name,
+                book_name=solution.book_name,
+                options=options,
+                seed=seed,
+            )
             save_solution_run(solution_book, stats_book, target)
 
         return solution, stats
@@ -227,12 +237,12 @@ class SolutionBook(UserDict):
         cls,
         puzzlebook,
         game_name: str = None,
-        mode: int = 2,
         seed: int = None,
         disp: bool = False,
         save: bool = True,
         path: str | Path = None,
         solutions_root: str | Path = SOLUTION_DIR,
+        **options,
     ) -> tuple["SolutionBook", "SolveStatsBook"]:
         """Solve every puzzle in a PuzzleBook and, by default, save the
         combined solutions and solve stats to a folder mirroring where
@@ -250,7 +260,12 @@ class SolutionBook(UserDict):
         stats_list = []
 
         for puzzle in puzzlebook.values():
-            solution, stats = Solution.from_puzzle(puzzle, mode=mode, seed=seed, save=False)
+            solution, stats = Solution.from_puzzle(
+                puzzle,
+                seed=seed,
+                save=False,
+                **options,
+            )
             # Individual puzzles carry their own Source, but this
             # SolutionBook is filed under the book's own game/book name --
             # keep every Solution in it consistent with that.
@@ -270,7 +285,7 @@ class SolutionBook(UserDict):
             *stats_list,
             game_name=game_name,
             book_name=book_name,
-            mode=mode,
+            options=options,
             seed=seed,
         )
 
@@ -295,12 +310,12 @@ class SolveStatsBook(UserDict):
         *stats: SolveStats,
         game_name: str = None,
         book_name: str = None,
-        mode: int = 2,
+        options: dict = None,
         seed: int = None,
     ):
         self.game_name = game_name
         self.book_name = book_name
-        self.mode = mode
+        self.options = dict(options or {})
         self.seed = seed
         super().__init__({s.puzzle_name: s for s in stats})
 
@@ -316,7 +331,7 @@ class SolveStatsBook(UserDict):
     def __repr__(self) -> str:
         header = f"Solve Stats {self.name}" if self.name else "Solve Stats"
         lines = [
-            f"{s.puzzle_name}: mode={s.mode} seed={s.seed} duration={s.duration:.3f}s "
+            f"{s.puzzle_name}: options={s.options} seed={s.seed} duration={s.duration:.3f}s "
             f"({len(s.elapsed)} solutions)"
             for s in self.values()
         ]

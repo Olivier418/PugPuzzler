@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from constants import DIFFICULTY_COLORS
+from constants import DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 from classes import SolutionBook
 from classes.solutions import SolveStatsBook
@@ -62,7 +62,7 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
     eps = min(positive_times) / 10 if positive_times else 1e-3
 
     for sol, x in zip(solved_puzzles, x_positions):
-        color = DIFFICULTY_COLORS[difficulty_by_name[sol.puzzle_name]]
+        color = DIFFICULTY_COLORS.get(difficulty_by_name[sol.puzzle_name], UNKNOWN_DIFFICULTY_COLOR)
         times = sorted(max(t, eps) for t in stats[sol.puzzle_name].elapsed)
 
         duration = max(stats[sol.puzzle_name].duration, eps)
@@ -84,7 +84,7 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
     ax.set_xticklabels([sol.puzzle_name for sol in solved_puzzles],
                         rotation=30, ha="right", rotation_mode="anchor")
     for tick_label, sol in zip(ax.get_xticklabels(), solved_puzzles):
-        tick_label.set_color(DIFFICULTY_COLORS[difficulty_by_name[sol.puzzle_name]])
+        tick_label.set_color(DIFFICULTY_COLORS.get(difficulty_by_name[sol.puzzle_name], UNKNOWN_DIFFICULTY_COLOR))
 
     ax.set_xlim(x_positions[0] - 1, x_positions[-1] + 1)
 

@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from constants import DIFFICULTY_COLORS
+from constants import DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 from classes import SolutionBook
 
@@ -17,7 +17,7 @@ def plot_difficulty_space(solutions: SolutionBook, puzzles=None, ax: plt.Axes = 
     infos = [sol.puzzle_info(puzzles) for sol in sols]
 
     labels = [sol.puzzle_name for sol in sols]
-    colors = [DIFFICULTY_COLORS[info.difficulty] for info in infos]
+    colors = [DIFFICULTY_COLORS.get(info.difficulty, UNKNOWN_DIFFICULTY_COLOR) for info in infos]
     nr_solutions = [len(sol.grids) for sol in sols]
     nr_empty_spaces = [info.nr_empty_spaces for info in infos]
 
