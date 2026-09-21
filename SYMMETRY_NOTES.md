@@ -1,81 +1,124 @@
-# Adding symmetry to the cell-MRV solver -- findings and starting points
+# Symmetry in the solver -- what was built, and what was left out
 
-Written at the end of the refactor that made cell-MRV the solver's only branching strategy and deleted block-MRV, partitioning and the old `symmetry_branching`. Everything below is meant to let a later session start from here without re-deriving it. Numbers are single runs on the development machine, not careful benchmarks.
+Supersedes the pre-implementation notes (the earlier version of this file, and
+`git show 343f69e^:SYMMETRY_SOLVER_NOTES.md`), which were written against the
+old block-MRV solver and whose numbers do not transfer to the current one.
 
-## 1. Where things stand
+## 1. The rule
 
-**Solver (`classes/solver.py`)** -- exhaustive exact cover, no flags, only `solve(seed=None)`.
-- Flat state: `_build_flat_tables` lays every block's placements end to end (`_placement_cells_flat`, rows padded with the dummy cell `n_cells`; block position `p` owns global ids `_block_start[p]:_block_start[p+1]`; `_block_of`, `_cell_lists[c]`, lazily cached `_overlapping(gid)`).
-- A node is `(live, block_count, cell_count)`: bool array over global ids, per-block live counts (`_PLACED` once placed), per-cell live counts. `_root_node()` builds the first; `_place(live, block_count, cell_count, pos, gid)` derives each child in a few array ops (returns `None` if some block is left with no placement).
-- `search` branches on the open cell with the fewest live placements (`_cell_branch_candidates`) and tries every placement covering it, ordered lexicographically by the sorted live counts of each candidate's cells. Ties: per-solve random priorities from the seed (`_priority` per placement, `_cell_priority` per cell; identity when unseeded).
-- Solutions are yielded as `state.copy()` snapshots.
+Skipping a branch and deriving its solutions from another branch is safe
+exactly when the branch set `C` satisfies both:
 
-**Symmetry geometry -- removed from the working tree, recoverable from git.** The geometry helpers were deleted as dead code (nothing used them) in the cleanup after commit `bf25303`; `git show bf25303:classes/puzzle.py` has them, and `git show bf25303:classes/lattice.py` has `point_group`:
-- `Lattice.point_group` -- all integer matrices `M` with `M.T @ gram2 @ M == gram2` (8 for square, 48 for the pyramid lattice; says nothing about a particular board).
-- `Setup.region_symmetries(mask)` -- every symmetry of an *arbitrary* sub-region of the board's cells, as compact-cell-index permutations that are the identity outside the mask (always includes the identity). Fast path via `Setup._symmetry_tables` (padded flattened positions of every cell under every matrix, so a translation is a scalar add and "lexicographically smallest cell" is a `min`); cost is a handful of numpy ops on `(K, m)` arrays, K = point-group size. `Setup.board_symmetries` = the same on all cells.
-- A `test_symmetry.py` (`test_region_symmetries_*`, `open_pocket_puzzle`, `quadrant_puzzle`, `random_tiling_puzzle`, `reference_solutions` -- an independent exact-cover DFS) existed in the working tree but was never committed and is gone; anything like it has to be rewritten. The reference DFS is the useful part.
-
-**Where the removed symmetry solver code lives.** The deleted design notes are `git show 343f69e^:SYMMETRY_SOLVER_NOTES.md` (read them: they explain the per-node region sweep, the cost work, and the correctness argument). The last *committed* solver with symmetry is commit `343f69e` (also `244be59`), where it is "mode 4" in `Solver.py`: `_region_symmetries` (memoized on the region mask, capped at 200k entries), `_orbits`, `_apply_symmetry`, `_placement_image`, `_build_placement_lookup`. The three-flag version that immediately preceded this refactor (`partition_pruning` / `partition_branching` / `symmetry_branching`) was never committed; mode 4 is the same idea.
-
-## 2. Why the old scheme worked, and the rule to keep
-
-The old solver branched on one *block* B. Let `R` be the still-open region and `G` its symmetry group (`region_symmetries(R)`; each element maps `R` onto itself and is the identity elsewhere). For `sigma` in `G`:
-- `sigma` maps every solution of `R` to another solution of `R`;
-- it maps a placement of B inside `R` to another placement of B inside `R` (guaranteed to exist: `Setup._valid_orientations` / `_compute_placement_indices` enumerate every isometric copy of every block).
-
-So the set of B's candidate placements is `G`-invariant, and every solution contains exactly one of them. The solutions therefore split into classes by B's placement, `sigma` maps the class of `p` bijectively onto the class of `sigma(p)`, and it is enough to search one representative `p` per orbit and *derive* the other classes by transforming the representative's solutions. No dedupe is needed and none of the derived solutions is ever found twice.
-
-**The rule: skipping-and-deriving is safe exactly when the branching set `C` satisfies both**
-1. `C` is invariant under the symmetries being used (each maps `C` onto itself);
+1. `C` is carried onto itself by every symmetry being used;
 2. every solution contains **exactly one** member of `C`.
 
-Placements of one block: both hold for the whole group. Placements covering one cell `c`: (2) holds, (1) only for symmetries that fix `c`.
+Placements of **one block**: both hold for the whole group. Placements covering
+**one cell**: (2) holds, (1) only for symmetries that fix that cell -- which for
+a corner of an 11x5 board is only the identity. That is why cell-MRV cannot use
+symmetry, and why the solver branches on a *block* at exactly the nodes where a
+group is live.
 
-## 3. Why plain cell-branching loses the symmetry
+## 2. What the solver does
 
-Branch set `S_c` = all placements (any block) covering the chosen cell `c`.
-- `sigma` maps a placement covering `c` to one covering `sigma(c)`. If `sigma(c) != c` the image is *not* one of this node's branches, so it says nothing about which branches are equivalent.
-- Worse, a solution `s` has some placement `p` at `c` and some `q` at `sigma(c)`. `sigma(s)` has `sigma(q)` at `c`, so it lives in branch `sigma(q)` of the *same* node -- and which branch depends on `q`, a choice made deeper in the subtree. Deriving `sigma(s)` from branch `p` would duplicate what branch `sigma(q)` finds on its own.
-- Taking *all* the most-constrained cells (a symmetric set: `cell_count` is `G`-invariant, so corners A,B,C,D of a square are all equally scarce) and branching on placements covering any of them makes the set `G`-invariant but breaks (2): every solution covers A and B and C and D, so it belongs to several branches.
-- The dedupe-free variant "explore `p`, derive all images, then forbid every image of `p` in later branches" needs dedupe for solutions containing both `p` and an image of `p`. Ruled out.
+`Solver.solve(branching=..., symmetry=..., up_to_symmetry=...)`.
 
-## 4. Options that fit the rule (no dedupe), roughly in order of promise
+- `Setup.region_symmetries` is called **once per solve**, on the root's open
+  cells. Not per node.
+- Branch on a block, group its live placements into orbits, search one
+  representative per orbit, derive the rest with `_transform`.
+- The child's group is the representative's **stabilizer**, which
+  `Solver._orbits` returns from the same sweep. No geometry is recomputed.
+  Trivial stabilizer (the common case) means that child and its whole subtree
+  revert to ordinary branching, permanently.
+- The group only ever shrinks down a branch, and it dies per-branch, not
+  globally -- different root branches lose it at different depths.
 
-**A. Hybrid per node: symmetric region -> branch on a block, otherwise branch on a cell.** The flat state supports a block branch directly: block position `pos`'s candidates are `gids = np.flatnonzero(live[_lo[pos]:_lo[pos+1]]) + _lo[pos]`, the fewest-placements block is `argmin(bcount)`, and `_place` already handles it. Full group, no dedupe. New code: the block branch step, orbit computation over gids, derived solutions.
+Images are permutations of compact cell indices that are the identity outside
+the root's open region. A stabilizer element maps the representative's cells
+onto themselves, and those cells all carry the same block, so transforming a
+whole solution grid leaves them -- and everything outside the open region,
+including preplaced blocks -- untouched. Nothing has to be re-restricted at
+depth.
 
-**B. Cell-branching with the stabilizer only.** Keep branching on cell `c`; use only images with `image[c] == c` (the stabilizer). `S_c` is invariant under those and each solution has exactly one placement covering `c`, so rule (1)+(2) hold. Gain is a factor `|Stab(c)|`: 2 for a corner of a square (the diagonal reflection), `|G|` if `c` is fixed by the whole group (e.g. the centre of an odd square). Hook: `cell_count` is `G`-invariant, so the min-count cells form a `G`-invariant set, and among them one can prefer the cell with the largest stabilizer -- `_cell_priority` is exactly where that preference goes. Orbits here mix blocks, so the orbit code works on gids, not (block, index).
+### Why `up_to_symmetry` is exact
 
-**C. Depth-gated symmetry.** Whichever of A/B is used, only test for symmetry near the root (or when a cheap invariant says it is plausible). See section 5: the per-node sweep cost is real and the payoff is concentrated at the top of empty boards.
+Solutions split by the branching block's placement; orbits of placements pair
+up with orbits of solutions; within a representative's branch the induction
+repeats under the stabilizer. So the searched solutions are exactly one per
+symmetry class, with no dedupe pass. It is also strictly *less* work than
+`symmetry=True`, since no image is ever built.
 
-Not worth it: orbit-elimination with dedupe (section 3).
+## 3. Measured
 
-## 5. Measured data (old code vs. the cell solver)
+Full enumeration, identical solution sets, best of 3.
 
-Before the cleanup, block-MRV with `symmetry_branching` vs the flat cell-MRV solver (best of runs; empty boards capped at 15 s; "sols/s" for symmetry runs is inflated because derived solutions are cheap transforms):
-
-| case | block pp+pb | block pp+pb+sym | cell (no partition) |
+| case | `branching="cell"` | default (balanced+symmetry) | speedup |
 |---|---|---|---|
-| `main_puzzles/50` (full) | 0.61 s, 4618 placed | 0.64 s, 4557 placed | 0.26 s, 3114 placed |
-| `pyramid_puzzles/100` (full) | 1.62 s, 12890 placed | 1.93 s, 12876 placed | 0.60 s, 7934 placed |
-| `empty_main` (15 s) | 37 sols/s | 146 sols/s | 127 sols/s |
-| `empty_pyramid` (15 s) | 0 sols | 0 sols | 11.5 sols/s |
+| 12 pentominoes, 3x20 (8 solutions) | 3.13 s | 0.99 s | **3.15x** |
+| 12 pentominoes, 4x15 (1472 solutions) | 66.2 s | 9.8 s | **6.73x** |
+| `main_puzzles` whole book (3680 solutions) | 12.14 s | 11.89 s | 1.02x |
+| `pyramid_puzzles` whole book (41 solutions) | 1.51 s | 1.53 s | 0.99x |
 
-Reading it:
-- **Preplaced puzzles get essentially nothing from symmetry**: the first preplaced letter breaks the board's symmetry. `main_puzzles/50`: 15 of 101 solutions derived by symmetry; `pyramid_puzzles/100`: 0 of 6, yet the per-node sweep cost about +19% (1.62 s -> 1.93 s) for 14 saved placements.
-- **Empty boards are where it pays**: `empty_main` first 300 solutions took 63102 placements without symmetry vs 11202 with, 227 of the 300 derived. That is the case the cell solver only matches (127 vs 146 sols/s) rather than beats, and `empty_pyramid` has never been tried with symmetry at all.
-- The symmetry that matters is at the top of the tree. After a few placements the open region is almost never symmetric, which is why depth-gating (C) should recover most of the gain at almost none of the cost. Test this rather than assume it.
-- Nested symmetry works (symmetries found at successive depths multiply): the `quadrant_puzzle` test went from 97 placements to 15 with 21 derived; the `open_pocket_puzzle` derives 3 of its 4 solutions.
+Board groups: main `|G| = 4`, pyramid `|G| = 8`.
 
-## 6. Porting the old machinery to flat ids
+The books get nothing, as expected: 20 of 72 `main_puzzles` and 6 of 29
+`pyramid_puzzles` do have `|G| > 1`, but they are the heavily-preplaced easy
+ones (3-15 open cells) and account for 3.1% and 1.4% of each book's solve time.
+What the books *do* get is `up_to_symmetry`: every symmetric `main_puzzle`
+collapses to a single solution (11 -> 1 of 8, 12 -> 1 of 4, 17-20 -> 1 of 4,
+35/65 -> 1 of 2; only 22 has 2), which is the uniqueness the game claims.
 
-- **Placement image.** A symmetry is `image` (`n_cells,` permutation of compact cells, identity outside the region). Use `image_ext = np.append(image, n_cells)` so the padding cell maps to itself. For a set of candidate gids, `np.sort(image_ext[_P[gids]], axis=1)` is the image's cell set; because the padding index is the largest, padding stays at the end after sorting. Build once a dict `{sorted padded row bytes: gid}` over all `_placement_cells_flat` rows (the old `_placement_lookup`, keyed by gid instead of block-local index) and look the image rows up in it. The lookup is guaranteed to hit for a live placement and a region symmetry.
-- **Orbits.** Same as the old `_orbits`: iterate candidates in visit order, the first unvisited one represents its orbit, and the image that takes it to each other member falls out of the same sweep. Visit order now comes from the lexicographic sort, so the representative is the best-ranked member, not the lowest index -- fine, the logic is order-agnostic.
-- **Derived solutions.** Old `_apply_symmetry(solution, image)`: `transformed.grid[image] = solution.grid`, and `chosen_placement_idx` remapped through the placement image (block-local index = `gid - _lo[pos]`). Transforming the whole grid is safe because every image is the identity outside the region, so earlier decisions, preplaced blocks and pockets elsewhere are untouched. Unlike the old code, the derived solution must also be a `state.copy()` snapshot with `chosen_placement_idx` consistent (`check_solution_consistent` in `test_symmetry.py` verifies this).
-- **Yield structure.** The old loop yielded `solution` then `_apply_symmetry(solution, image)` for each `image` in the representative's orbit, inside the recursion over the representative. `rec` is already a generator, so it drops in unchanged.
-- **Region symmetry per node.** `Setup.region_symmetries(available_spots)` with a memo keyed on `available_spots.tobytes()` (the same leftover region recurs across siblings). `available_spots` in `rec` is the compact bool array of open cells.
-- **Seeds.** The representative is the first orbit member in visit order, and priorities are per-solve constants, so results stay reproducible for a given seed; the *order* solutions arrive in will differ from an unsymmetric run (derived solutions arrive in bursts right after their representative's).
+Choosing the branching block: `min(block_count)` — fewest live placements — is
+right, and it was worth checking. Picking the block with the best orbit
+reduction instead searches strictly fewer solutions and is still **2.5x
+slower**, because a block with few placements constrains the board far more and
+that dominates:
 
-## 7. Testing and benchmarking hooks
+| case | rule | root block | reduction | time |
+|---|---|---|---|---|
+| 3x20 | fewest placements | X (18 placements) | 2.00x | **0.79 s** |
+| 3x20 | best orbit reduction | V (72) | 4.00x | 1.96 s |
+| 4x15 | fewest placements | X (26) | 3.71x | **12.4 s** |
+| 4x15 | best orbit reduction | V (104) | 4.00x | 28.5 s |
 
-- Correctness: `check_matches_reference` (solver vs. the independent DFS, for seeds `None`/0/7) on the open pocket, quadrants, 30 random tilings, `main_puzzles` 40-60, `pyramid_puzzles` 80-90; `pyramid_puzzles/100` pinned at 6 solutions. Add a derived-solution counter (the old `CountingSolver` counted `_apply_symmetry` calls and placements) to assert the payoff on the quadrant and pocket puzzles, and keep `NodeCountCheckingSolver` (incremental counts vs. recount) running.
-- Benchmarking: `plotting.benchmark` compares configs given as option dicts forwarded to the solver (`DEFAULT_CONFIGS = [{}]`). Once `Solver.solve` takes an option such as `symmetry`, benchmark it with `run_benchmark(puzzle, configs=[{}, {"symmetry": True}], nr_tests=..., T=...)` on `empty_main`, `empty_pyramid`, `main_puzzles/50` and `pyramid_puzzles/100`. Old runs saved with the three legacy flags still load (they are folded into `options`).
+Fewest-placements gives up some reduction at the root (main block L: 2.70x of a
+possible 4x), but that is exactly what the stabilizer chain earns back -- a
+placement with an undersized orbit is one that *preserves* part of the
+symmetry, so the region left open is still symmetric and the reduction nests.
+
+## 4. Deliberately not done: symmetric pockets
+
+Symmetries of the open region that are **not** inherited from the root group --
+a symmetric hole left in an otherwise asymmetric board. That is the old
+"mode 4". Finding them needs `region_symmetries` at every node, and in the
+current lean solver that does not pay:
+
+- Sweep cost: **34 us/node** (main) / **52 us/node** (pyramid) against only
+  **77 / 99 us/node** of actual node work, i.e. **+54-57%** runtime
+  unmemoized, ~+9% with a memo at a 67% hit rate.
+- Headroom, measured as the share of the tree under an outermost symmetric node
+  weighted by `1 - 1/|G|`, *after* the root group is already exploited:
+  **19.4%** best case on `empty_main` (1234 symmetric nodes of 43799), 14.6% on
+  `main_puzzles/50`. And that bound ignores the cost of block-branching at
+  those nodes.
+- Only 5.8-7.2% of nodes are symmetric, mostly `|G| = 2`, concentrated at small
+  leftover regions whose subtrees are tiny.
+
+On both empty boards the outermost symmetric node **is the root**, so the whole
+tree already sits under the reduction the solver does perform.
+
+The old numbers (+3% on `main_puzzles/50`, +24% on `pyramid_puzzles/100`) looked
+affordable only because the old block-MRV solver did ~5x more work per node.
+
+Also checked and ruled out: **congruent blocks**. Two identically-shaped pieces
+would give a free "swap them" symmetry with no geometry involved, but there are
+none in either IQpuzzler setup. (IQpuzzlerPRO and IQquub were not checked.)
+
+## 5. Where the old code lives
+
+The geometry restored here (`Lattice.point_group`, `Setup.region_symmetries`,
+`_symmetry_tables`) came from `git show bf25303:classes/lattice.py` and
+`git show bf25303:classes/puzzle.py`. The last committed solver with the
+per-node version is `343f69e` (`Solver.py`, "mode 4"), and its design notes are
+`git show 343f69e^:SYMMETRY_SOLVER_NOTES.md` -- still the best account of the
+per-node sweep's cost work if section 4 is ever revisited.

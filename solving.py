@@ -86,6 +86,7 @@ def solve_puzzle(
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
+    up_to_symmetry: bool = False,
     **options,
 ) -> tuple[Solution, SolveStats]:
     """Solve a single Puzzle and, by default, save the results and
@@ -99,13 +100,22 @@ def solve_puzzle(
     controls progress printing. `time_limit` (seconds) and
     `max_solutions` stop the solve early, whichever is hit first (both
     default to infinity; not recorded in the SolveStats -- its
-    `duration` and `elapsed` show a truncated run). `options` are
-    forwarded to the solver and recorded in the SolveStats.
+    `duration` and `elapsed` show a truncated run). `up_to_symmetry`
+    keeps one solution per symmetry class; like the two limits it changes
+    which solutions come back rather than how they are found, so it is
+    named here and kept out of `options`. `options` are forwarded to the
+    solver and recorded in the SolveStats.
     """
     start = time.perf_counter()
     grids = []
     elapsed = []
-    for state in puzzle.solve(seed=seed, time_limit=time_limit, max_solutions=max_solutions, **options):
+    for state in puzzle.solve(
+        seed=seed,
+        time_limit=time_limit,
+        max_solutions=max_solutions,
+        up_to_symmetry=up_to_symmetry,
+        **options,
+    ):
         grids.append(state.setup.to_full_grid(state.grid))
         elapsed.append(time.perf_counter() - start)
         if verbose >= Verbosity.SHOW_SOLUTIONS:
@@ -140,6 +150,7 @@ def solve_puzzlebook(
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
+    up_to_symmetry: bool = False,
     **options,
 ) -> tuple[SolutionBook, SolveStatsBook]:
     """Solve every puzzle in a PuzzleBook and, by default, save the
@@ -147,7 +158,8 @@ def solve_puzzlebook(
     the book itself was loaded from (see solve_puzzle for the
     mirroring rule). `verbose` applies to each puzzle in turn.
 
-    `time_limit` and `max_solutions` apply to each puzzle separately.
+    `time_limit`, `max_solutions` and `up_to_symmetry` apply to each
+    puzzle separately.
 
     Delegates per-puzzle solving to solve_puzzle so the two entry points
     can't drift apart; only the batching and the single combined save are
@@ -167,6 +179,7 @@ def solve_puzzlebook(
             save=False,
             time_limit=time_limit,
             max_solutions=max_solutions,
+            up_to_symmetry=up_to_symmetry,
             **options,
         )
         # Individual puzzles carry their own Source, but this

@@ -24,11 +24,17 @@ class Solver:
     """Exhaustive exact-cover solver for a State (or Puzzle): every block
     must be placed and every open cell covered exactly once.
 
-    The search branches on the open cell covered by the fewest live
-    placements (across all unplaced blocks) -- the most constrained cell --
-    and tries every placement that covers it. Every solution covers that
-    cell exactly once, so those branches partition the solutions: nothing
-    is missed and nothing is found twice.
+    By default the search branches on the open cell covered by the fewest
+    live placements (across all unplaced blocks) -- the most constrained
+    cell -- and tries every placement that covers it. Every solution
+    covers that cell exactly once, so those branches partition the
+    solutions: nothing is missed and nothing is found twice.
+
+    Where the still-open region is symmetric it branches on a block
+    instead, and searches only one placement per symmetry orbit; see
+    solve()'s `branching`/`symmetry`/`up_to_symmetry`. That only happens
+    near the root -- the group dies as soon as a placement breaks it --
+    so the cell branch above is still what runs essentially everywhere.
 
     Only reads State's public surface (board, blocks, placements,
     chosen_placement_idx, grid, place(), remove(), copy()) -- no
@@ -66,6 +72,10 @@ class Solver:
         # priorities that break ties (see solve()). So every table indexed
         # by placement is built once and never goes stale.
         self._build_flat_tables()
+
+        # Setup.placement_lookup, bound by solve() only when a mode can
+        # actually use symmetry -- so a solve that can't never builds it.
+        self._placement_lookup = None
 
     def _build_flat_tables(self):
         """Every block's placements laid end to end in one array, so the
@@ -177,22 +187,43 @@ class Solver:
         new_cell_count = cell_count - np.bincount(gone, minlength=cell_count.size)
         return new_live, new_block_count, new_cell_count
 
+    def _order_gids(self, gids, cell_count):
+        """`gids` in visit order: lexicographic by each placement's cells'
+        live placement counts, sorted ascending and compared like tuples
+        -- so a placement covering the scarcest cells comes first, with no
+        weights to tune. Whatever is still tied (equal count vectors) is
+        decided by the per-solve priorities `solve` draws from the seed
+        (identity order when unseeded).
+
+        Shared by the cell branch, the block branch and the symmetry
+        orbit sweep, so all three agree on which candidate is "best" --
+        which is what makes the orbit representative the best-ranked
+        member of its orbit rather than an arbitrary one."""
+        n_cells = self.state.setup.n_cells
+        rows = self._placement_cells_flat[gids]
+        keys = cell_count[rows]
+        keys[rows == n_cells] = int(cell_count[:n_cells].max()) + 1  # padding sorts last
+        keys.sort(axis=1)
+        # lexsort treats its *last* key as primary.
+        return gids[np.lexsort((self._priority[gids], *keys.T[::-1]))]
+
+    def _dead_end(self, open_cells, cell_count):
+        """True if some open cell has no live placement left -- nothing
+        can ever cover it, so this node is finished."""
+        n_cells = self.state.setup.n_cells
+        return bool(np.any(open_cells & (cell_count[:n_cells] == 0)))
+
     def _cell_branch_candidates(self, live, open_cells, cell_count):
         """The open cell covered by the fewest live placements
         (`cell_count`, across every unplaced block) and every placement
         covering it, as `[(block_position, global_id), ...]` in visit
-        order. None if some open cell has no live placement left -- a dead
-        end, since every open cell has to be covered.
+        order. None if the node is a dead end.
 
-        Visit order is lexicographic: each candidate's cells' live
-        placement counts, sorted ascending, compared like tuples -- so a
-        candidate covering the scarcest cells comes first, with no weights
-        to tune. Whatever is still tied (equal count vectors, or several
-        equally scarce cells) is decided by the per-solve priorities that
-        `solve` draws from the seed (identity order when unseeded)."""
+        Every solution covers that cell exactly once, so these branches
+        partition the solutions."""
         n_cells = self.state.setup.n_cells
         counts = cell_count[:n_cells]
-        if np.any(open_cells & (counts == 0)):
+        if self._dead_end(open_cells, cell_count):
             return None
 
         # One argmin picks the scarcest open cell, priority breaking ties.
@@ -204,31 +235,157 @@ class Solver:
         )))
 
         gids = self._cell_lists[cell]
-        gids = gids[live[gids]]
-        rows = self._placement_cells_flat[gids]
-        keys = cell_count[rows]
-        keys[rows == n_cells] = pad  # padding sorts after any real count
-        keys.sort(axis=1)
-
-        # lexsort treats its *last* key as primary.
-        gids = gids[np.lexsort((self._priority[gids], *keys.T[::-1]))]
+        gids = self._order_gids(gids[live[gids]], cell_count)
         return list(zip(self._block_of[gids].tolist(), gids.tolist()))
 
-    def solve(self, seed: int = None, time_limit: float = math.inf, max_solutions: float = math.inf):
+    def _block_branch_candidates(self, live, block_count, cell_count, open_cells):
+        """The still-unplaced block with the fewest live placements, as
+        `(block_position, global_ids in visit order)`. None if the node is
+        a dead end.
+
+        Every solution places that block exactly once, so these branches
+        partition the solutions -- and unlike the cell branch, the set of
+        them is carried onto itself by any symmetry of the open region,
+        which is what lets `solve` collapse it into orbits (see
+        _orbits)."""
+        if self._dead_end(open_cells, cell_count):
+            return None
+        pos = int(np.argmin(block_count))
+        lo, hi = self._block_start[pos], self._block_start[pos + 1]
+        gids = np.flatnonzero(live[lo:hi]) + lo
+        if gids.size == 0:
+            return None
+        return pos, self._order_gids(gids, cell_count)
+
+    # ---- symmetry -------------------------------------------------------
+    # A symmetry is an `image`: a permutation of compact cell indices that
+    # is the identity outside the region it was computed for. `solve` asks
+    # Setup for the root's group once; every group used deeper is a
+    # subgroup of it, found by filtering (see _orbits' stabilizer) rather
+    # than by searching the geometry again.
+
+    def _image_placement_idx(self, block_idx, placement_idx, image):
+        """The placement of the same block that `image` maps placement
+        `placement_idx` onto. Guaranteed to hit -- see
+        Setup.placement_lookup."""
+        cells = self.placement_cells[block_idx][placement_idx]
+        return self._placement_lookup[block_idx][np.sort(image[cells]).tobytes()]
+
+    def _placement_image(self, pos, gid, image):
+        """_image_placement_idx in global-id space."""
+        lo = self._block_start[pos]
+        return self._image_placement_idx(self._block_ids[pos], int(gid - lo), image) + lo
+
+    def _orbits(self, pos, gids, images):
+        """Group `gids` (block position `pos`'s live placements, all lying
+        inside the symmetric region) into orbits under `images`, yielding
+        `(representative, [image onto each other member], stabilizer)` per
+        orbit.
+
+        `gids` is in visit order, so the first unvisited one represents
+        its orbit -- and since `images` forms a group, its orbit under
+        those images is the whole orbit, so the image carrying it onto
+        each other member falls out of the same sweep.
+
+        `stabilizer` is the subgroup fixing the representative's cells,
+        i.e. the symmetries still live once it is placed. It always
+        contains the identity, so it is never empty; anything more means
+        the child region is still symmetric and the reduction nests."""
+        visited = set()
+        for gid in gids.tolist():
+            if gid in visited:
+                continue
+            orbit = {}
+            stabilizer = []
+            for image in images:
+                other = self._placement_image(pos, gid, image)
+                if other == gid:
+                    stabilizer.append(image)
+                orbit.setdefault(other, image)
+            visited |= orbit.keys()
+            yield gid, [img for other, img in orbit.items() if other != gid], stabilizer
+
+    def _transform(self, solution, image):
+        """A completed State/Puzzle snapshot, transformed by `image`: the
+        mirror/rotation of `solution` in the branch the search skipped,
+        which the symmetry guarantees is a valid completion once
+        `solution` is.
+
+        Transforming the *whole* grid is safe even though the symmetry is
+        only about one node's open region: the image is the identity
+        outside that region, so preplaced blocks and everything an
+        ancestor decided come back out untouched -- including their
+        placement indices, which the lookup below resolves to
+        themselves."""
+        transformed = solution.copy()
+        transformed.grid = np.empty_like(solution.grid)
+        transformed.grid[image] = solution.grid
+        transformed.chosen_placement_idx = {
+            idx: (self._image_placement_idx(idx, p, image) if p != UNPLACED else UNPLACED)
+            for idx, p in solution.chosen_placement_idx.items()
+        }
+        return transformed
+
+    def solve(
+        self,
+        seed: int = None,
+        time_limit: float = math.inf,
+        max_solutions: float = math.inf,
+        branching: str = "balanced",
+        symmetry: bool = True,
+        up_to_symmetry: bool = False,
+    ):
         """Yield every solution as a fully placed copy of the state, or --
         if a limit is hit first -- just the ones found by then.
 
         `time_limit` (seconds, counted from the first `next()`) and
         `max_solutions` both default to infinity; the search stops as soon
         as either is reached. The time is checked once per search node, so
-        it can overshoot by about one node.
+        it can overshoot by about one node. Derived solutions (see
+        `symmetry`) count towards `max_solutions` like any other.
 
         `seed` randomises the order solutions are found in without
         changing the set: it draws one random priority per placement and
         per cell, used only to break ties the search's own ordering
         leaves open. Unseeded, ties fall to placement/cell index order.
         Nothing is ever reordered or shared, so a seed can't disturb
-        anything indexed by placement."""
+        anything indexed by placement.
+
+        `branching` picks what each node branches on:
+          - "cell": the open cell covered by the fewest live placements,
+            trying every placement covering it. The strongest heuristic,
+            but its branch set is not carried onto itself by a symmetry
+            of the open region, so it cannot use `symmetry` at all.
+          - "block": the unplaced block with the fewest live placements,
+            trying every one of them. Markedly weaker on its own -- it is
+            here as the symmetry-compatible branch and as a benchmark
+            baseline, not as a way to solve puzzles.
+          - "balanced" (default): block while the open region still has a
+            live symmetry group, cell once it doesn't. Since the group
+            dies within a few levels of the root on almost every branch,
+            this is cell-branching everywhere that matters, with the
+            symmetry collapsed where it exists.
+
+        `symmetry` turns the orbit reduction on: at a node whose open
+        region has a nontrivial symmetry group, the branching block's
+        placements are grouped into orbits, only one representative per
+        orbit is searched, and the other members' solutions are produced
+        by transforming the representative's. The solution *set* is
+        unchanged; the order is not (a solution is followed by its
+        images). It is a no-op with `branching="cell"`.
+
+        `up_to_symmetry` yields only the representatives -- one solution
+        per symmetry class, so e.g. a puzzle whose four solutions are
+        rotations of one another reports one. Strictly less work than
+        `symmetry` alone, since no image is ever built. It needs the
+        group, so it uses the balanced path even under
+        `branching="cell"`.
+        """
+        if branching not in ("cell", "block", "balanced"):
+            raise ValueError(
+                f"branching must be 'cell', 'block' or 'balanced', got {branching!r}."
+            )
+
         n_total = self._placement_cells_flat.shape[0]
         n_cells = self.state.setup.n_cells
         if seed is None:
@@ -239,32 +396,64 @@ class Solver:
             self._priority = rng.permutation(n_total)
             self._cell_priority = rng.permutation(n_cells)
 
+        # The root's symmetry group, computed once. Every group the search
+        # uses deeper is a subgroup of this one (a representative's
+        # stabilizer), so the geometry is never searched again -- which is
+        # what keeps symmetry off the per-node cost entirely. None means
+        # "don't look", so a solve that can't use symmetry never builds
+        # Setup's symmetry tables or placement lookup at all.
+        root_images = None
+        if up_to_symmetry or (symmetry and branching != "cell"):
+            self._placement_lookup = self.state.setup.placement_lookup
+            images = self.state.setup.region_symmetries(self.state.grid == EMPTY)
+            if len(images) > 1:
+                root_images = images
+        block_branching = branching == "block"
+
         deadline = time.perf_counter() + time_limit
         found = 0
         stopped = max_solutions <= 0
 
-        def search(live, block_count, cell_count, open_cells):
+        def search(live, block_count, cell_count, open_cells, images):
             """`live`/`block_count`/`cell_count` are a valid node (see
             _root_node), already pruned against `open_cells`, and
-            owned by this call."""
+            owned by this call. `images` is the node's symmetry group, or
+            None once nothing is left to collapse."""
             nonlocal found, stopped
             if stopped or time.perf_counter() >= deadline:
                 # Sticky, so every caller up the stack unwinds too (each
-                # undoing its own placement on the way out).
+                # undoing its own placement on the way out). Nothing ever
+                # breaks out of a `for ... in search(...)` loop, which
+                # would abandon a generator mid-placement.
                 stopped = True
                 return
 
             if block_count.min() == _PLACED:
+                # Counted *before* the yield: a generator doesn't resume
+                # until its consumer asks for the next item, and
+                # orbit_branch reads `stopped` in between to decide
+                # whether it may still derive this solution's images.
+                found += 1
+                stopped = found >= max_solutions
                 # A full State snapshot, independent of self.state (which
                 # keeps getting mutated as the search backtracks further).
                 yield self.state.copy()
-                found += 1
-                stopped = found >= max_solutions
                 return
 
-            candidates = self._cell_branch_candidates(live, open_cells, cell_count)
-            if candidates is None:
+            if images is not None:
+                yield from orbit_branch(live, block_count, cell_count, open_cells, images)
                 return
+
+            if block_branching:
+                branch = self._block_branch_candidates(live, block_count, cell_count, open_cells)
+                if branch is None:
+                    return
+                pos, gids = branch
+                candidates = [(pos, int(gid)) for gid in gids]
+            else:
+                candidates = self._cell_branch_candidates(live, open_cells, cell_count)
+                if candidates is None:
+                    return
 
             for pos, gid in candidates:
                 block_idx = self._block_ids[pos]
@@ -278,11 +467,64 @@ class Solver:
                 self.state.place_unchecked(block_idx, placement_idx)
                 open_cells.flat[placement] = False
 
-                yield from search(*child, open_cells)
+                yield from search(*child, open_cells, None)
 
                 self.state.remove_unchecked(block_idx)
                 open_cells.flat[placement] = True
 
+        def orbit_branch(live, block_count, cell_count, open_cells, images):
+            """A node whose open region is symmetric: branch on a block --
+            the one branch set a symmetry carries onto itself -- and only
+            search one placement per orbit, deriving the rest.
+
+            Correct because every solution places that block exactly once,
+            so the branches partition the solutions, and a symmetry of the
+            open region is a bijection from the completions of one
+            branch onto those of its image. Nothing is missed and nothing
+            is found twice."""
+            nonlocal found, stopped
+            branch = self._block_branch_candidates(live, block_count, cell_count, open_cells)
+            if branch is None:
+                return
+            pos, gids = branch
+            block_idx = self._block_ids[pos]
+
+            for rep, others, stabilizer in self._orbits(pos, gids, images):
+                placement_idx = int(rep - self._block_start[pos])
+                placement = self.placement_cells[block_idx][placement_idx]
+
+                child = self._place(live, block_count, cell_count, pos, rep)
+                if child is None:
+                    continue
+
+                self.state.place_unchecked(block_idx, placement_idx)
+                open_cells.flat[placement] = False
+
+                # The child's group is what's left of this one once the
+                # representative is down. Usually nothing, and then the
+                # whole subtree is ordinary branching; when it isn't, the
+                # reduction simply nests and the factors multiply.
+                for solution in search(*child, open_cells,
+                                       stabilizer if len(stabilizer) > 1 else None):
+                    yield solution
+                    if up_to_symmetry:
+                        continue
+                    for image in others:
+                        if stopped:
+                            break
+                        # Counted before the yield, for the same reason as
+                        # in search()'s base case: when orbit reductions
+                        # nest, the enclosing orbit_branch inspects
+                        # `stopped` while this one is suspended here.
+                        found += 1
+                        stopped = found >= max_solutions
+                        yield self._transform(solution, image)
+
+                self.state.remove_unchecked(block_idx)
+                open_cells.flat[placement] = True
+                if stopped:
+                    return
+
         node = self._root_node()
         if node is not None:
-            yield from search(*node, self.state.grid == EMPTY)
+            yield from search(*node, self.state.grid == EMPTY, root_images)

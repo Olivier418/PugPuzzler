@@ -104,6 +104,7 @@ class State:
         seed: int = None,
         time_limit: float = math.inf,
         max_solutions: float = math.inf,
+        up_to_symmetry: bool = False,
         **options,
     ):
         """Solve this state, yielding each solution as its own copy of it
@@ -115,11 +116,26 @@ class State:
         `seed` randomises the order solutions are found in (never which
         ones). Stops early once `time_limit` seconds have passed or
         `max_solutions` have been found, whichever comes first (both
-        default to infinity). `options` are forwarded to Solver.solve
-        as-is."""
+        default to infinity).
+
+        `up_to_symmetry` yields one solution per symmetry class instead of
+        every solution -- so it changes the result rather than the route
+        to it, which is why it is named here alongside `max_solutions`
+        rather than left in `options` for benchmark.py to treat as a
+        solver config.
+
+        `options` (`branching`, `symmetry`) are forwarded to Solver.solve
+        as-is; they never change the solution set, only how fast and in
+        what order it arrives."""
         solver = Solver(self)
         for sol_idx, sol in enumerate(
-            solver.solve(seed=seed, time_limit=time_limit, max_solutions=max_solutions, **options)
+            solver.solve(
+                seed=seed,
+                time_limit=time_limit,
+                max_solutions=max_solutions,
+                up_to_symmetry=up_to_symmetry,
+                **options,
+            )
         ):
             if self.name:
                 sol.name = f"{self.name} (solution {sol_idx + 1})"

@@ -16,9 +16,19 @@ from solving import make_result, single_run_books
 
 
 # A config is the dict of keyword options handed to the solver (besides the
-# seed). The solver currently has none, so the default is a single empty
-# config; benchmarking a solver variant means adding its options here.
-DEFAULT_CONFIGS = [{}]
+# seed): `branching` and `symmetry` (see Solver.solve). An empty config means
+# the solver's own defaults, i.e. branching="balanced" + symmetry -- so
+# {"branching": "cell"} is the plain cell-MRV baseline, not {}.
+#
+# Only options that leave the solution set alone belong here; anything that
+# changes *which* solutions come back (up_to_symmetry, like the two limits)
+# would make two configs solve different problems, so it is a named argument
+# on solve_puzzle instead.
+DEFAULT_CONFIGS = [{"branching":"cell",},
+                   {"branching":"block","symmetry":True},
+                   {"branching":"block","symmetry":False},
+                   {"branching":"balanced","symmetry":True},
+                   ]
 
 ConfigKey = tuple[tuple[str, object], ...]
 

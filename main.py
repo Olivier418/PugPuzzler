@@ -21,17 +21,17 @@ if __name__ == "__main__":
     # solution_book, stats_book = solve_puzzlebook(IQpuzzlerPRO.books['pyramid_puzzles'], verbose=Verbosity.SUMMARY)
     # solution_book, stats_book = solve_puzzlebook(IQpuzzlerPRO.books['alt_puzzles'], verbose=Verbosity.SUMMARY)
 
-    solution, stats = solve_puzzle(IQquub.puzzles['89'], verbose=Verbosity.SHOW_SOLUTIONS)
-    solution, stats = solve_puzzle(IQquub.puzzles['90'], verbose=Verbosity.SHOW_SOLUTIONS)
-    solution, stats = solve_puzzle(IQquub.puzzles['120'], verbose=Verbosity.SHOW_SOLUTIONS)
+    # solution, stats = solve_puzzle(IQquub.puzzles['89'], verbose=Verbosity.SHOW_SOLUTIONS)
+    # solution, stats = solve_puzzle(IQquub.puzzles['90'], verbose=Verbosity.SHOW_SOLUTIONS)
+    # solution, stats = solve_puzzle(IQquub.puzzles['120'], verbose=Verbosity.SHOW_SOLUTIONS)
 
     # solution_book, stats_book = load_solution_run("solutions/IQpuzzlerPRO/books/pyramid_puzzles/result_1")
     # plot_difficulty_space(solution_book)
     # plot_solve_timeline(solution_book, stats_book)
     # plt.show()
 
-    # EMPTY_MAIN = IQpuzzler.puzzles['empty_main']
-    # stats_books, folder = run_benchmark(EMPTY_MAIN, nr_tests=10, T=10)  # configs default to DEFAULT_CONFIGS
+    EMPTY_MAIN = IQpuzzler.puzzles['empty_main']
+    stats_books, folder = run_benchmark(EMPTY_MAIN, nr_tests=1, T=1)  # configs default to DEFAULT_CONFIGS
     # stats_books = load_benchmark(folder)
-    # plot_benchmark(stats_books, T=10)
-    # plt.show()
+    plot_benchmark(stats_books, T=10)
+    plt.show()
