@@ -331,7 +331,7 @@ class Solver:
         seed: int = None,
         time_limit: float = math.inf,
         max_solutions: float = math.inf,
-        branching: str = "balanced",
+        branching: str = "hybrid",
         symmetry: bool = True,
         up_to_symmetry: bool = False,
     ):
@@ -360,7 +360,7 @@ class Solver:
             trying every one of them. Markedly weaker on its own -- it is
             here as the symmetry-compatible branch and as a benchmark
             baseline, not as a way to solve puzzles.
-          - "balanced" (default): block while the open region still has a
+          - "hybrid" (default): block while the open region still has a
             live symmetry group, cell once it doesn't. Since the group
             dies within a few levels of the root on almost every branch,
             this is cell-branching everywhere that matters, with the
@@ -378,12 +378,12 @@ class Solver:
         per symmetry class, so e.g. a puzzle whose four solutions are
         rotations of one another reports one. Strictly less work than
         `symmetry` alone, since no image is ever built. It needs the
-        group, so it uses the balanced path even under
+        group, so it uses the hybrid path even under
         `branching="cell"`.
         """
-        if branching not in ("cell", "block", "balanced"):
+        if branching not in ("cell", "block", "hybrid"):
             raise ValueError(
-                f"branching must be 'cell', 'block' or 'balanced', got {branching!r}."
+                f"branching must be 'cell', 'block' or 'hybrid', got {branching!r}."
             )
 
         n_total = self._placement_cells_flat.shape[0]

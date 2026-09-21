@@ -17,7 +17,7 @@ from solving import make_result, single_run_books
 
 # A config is the dict of keyword options handed to the solver (besides the
 # seed): `branching` and `symmetry` (see Solver.solve). An empty config means
-# the solver's own defaults, i.e. branching="balanced" + symmetry -- so
+# the solver's own defaults, i.e. branching="hybrid" + symmetry -- so
 # {"branching": "cell"} is the plain cell-MRV baseline, not {}.
 #
 # Only options that leave the solution set alone belong here; anything that
@@ -27,7 +27,7 @@ from solving import make_result, single_run_books
 DEFAULT_CONFIGS = [{"branching":"cell",},
                    {"branching":"block","symmetry":True},
                    {"branching":"block","symmetry":False},
-                   {"branching":"balanced","symmetry":True},
+                   {"branching":"hybrid","symmetry":True},
                    ]
 
 ConfigKey = tuple[tuple[str, object], ...]

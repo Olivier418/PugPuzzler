@@ -114,11 +114,62 @@ Also checked and ruled out: **congruent blocks**. Two identically-shaped pieces
 would give a free "swap them" symmetry with no geometry involved, but there are
 none in either IQpuzzler setup. (IQpuzzlerPRO and IQquub were not checked.)
 
-## 5. Where the old code lives
+## 5. Also measured and not done: partitioning into components
+
+Not a symmetry, but the same kind of question. The old block-MRV solver had two
+options for when the open region falls apart into connected components:
+**prune** the node if the unplaced block sizes can't be distributed over the
+component sizes, and **branch** on every such distribution, solving each
+component with only its own blocks. Re-measured on 2026-09-21 with counting-only
+copies of the search built on `Solver`'s own tables, `_place` and branch
+candidates (identical solution counts in every mode):
+
+- *prune*: sizes only, as before, or with each block restricted to the
+  components it has a live placement in (prunes marginally more).
+- *split*: stronger than the old branch. Tile the smallest component once with
+  any blocks, group its tilings by the block set used, solve the rest once per
+  set and multiply. The old version re-solved the later component once per
+  solution of the earlier one, so this is an upper bound on it.
+
+| case | nodes saved, prune | prune time | nodes saved, split |
+|---|---|---|---|
+| `main_puzzles` | 0.35% | 1.13x | -0.1% |
+| `pyramid_puzzles` | 0.3% | 1.25x | -0.05% |
+| PRO `main_puzzles` | 16% | 1.00x | 11% |
+| PRO `alt_puzzles` | 22% | **0.86x** | 17% |
+| PRO `pyramid_puzzles` | 0.4% | 1.20x | 0.0% |
+| all five empty boards (sampled subtrees) | 0.2-1.0% | slower | -0.3 to +0.2% |
+
+Times are best-of-N for the cheapest check tried: the open region as a Python
+int, flood-filled by masked shifts, then a subset sum over the unplaced block
+sizes. A BFS over neighbour lists costs about the same.
+
+It did help the block solver (block branching still gets ~20% fewer nodes from
+it, and is still ~1.6x slower than cell branching). It doesn't transfer:
+
+- Cell-MRV already goes straight for a leftover pocket, whose cells are the
+  scarcest. Most splits cut off a 3-5 cell pocket that one block fills, which is
+  exactly what the cell branch does anyway.
+- Splits come late: mostly 7-9 placements deep on the empty boards, where
+  subtrees are small. Fewer than 100 of ~12,000 sampled splits happen within 4
+  placements, so checking only near the root finds almost nothing.
+- The check costs 11-28 us against 70-100 us of node work, so even PRO main's
+  16% fewer nodes only breaks even. PRO alt's diagonal board, which splits
+  constantly, is the one place it wins.
+
+Where decomposition clearly works is an even split near the root, and only
+PRO `empty_alt` produces those at its symmetric (block-branched) nodes. On
+`[19, 31]`, *split* takes 70k nodes down to 13k, and it is 2-5.5x on five of the
+ten such nodes, but together they are an estimated 0.4% of that tree. On
+IQpuzzler `empty_main` the symmetric nodes never split.
+
+## 6. Where the old code lives
 
 The geometry restored here (`Lattice.point_group`, `Setup.region_symmetries`,
 `_symmetry_tables`) came from `git show bf25303:classes/lattice.py` and
 `git show bf25303:classes/puzzle.py`. The last committed solver with the
 per-node version is `343f69e` (`Solver.py`, "mode 4"), and its design notes are
 `git show 343f69e^:SYMMETRY_SOLVER_NOTES.md` -- still the best account of the
-per-node sweep's cost work if section 4 is ever revisited.
+per-node sweep's cost work if section 4 is ever revisited. The partitioning of
+section 5 is `git show 343f69e:partitioning.py` plus modes 1 (prune) and 2
+(branch) in `git show 343f69e:Solver.py`.
