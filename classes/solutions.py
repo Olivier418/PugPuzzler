@@ -1,3 +1,4 @@
+import math
 from collections import UserDict
 from pathlib import Path
 import time
@@ -80,6 +81,8 @@ class Solution:
         save: bool = True,
         path: str | Path = None,
         solutions_root: str | Path = SOLUTION_DIR,
+        time_limit: float = math.inf,
+        max_solutions: float = math.inf,
         **options,
     ) -> tuple["Solution", SolveStats]:
         """Solve a single Puzzle and, by default, save the results and
@@ -89,13 +92,18 @@ class Solution:
         solutions/IQpuzzler/puzzles/main_empty/<idx>/{solutions,stats}.json).
 
         Pass `save=False` to just solve, or `path=` to save somewhere
-        specific instead of the mirrored default. `options` are forwarded
-        to the solver and recorded in the SolveStats.
+        specific instead of the mirrored default. `time_limit` (seconds)
+        and `max_solutions` stop the solve early, whichever is hit first
+        (both default to infinity; not recorded in the SolveStats -- its
+        `duration` and `elapsed` show a truncated run). `options` are
+        forwarded to the solver and recorded in the SolveStats.
         """
         start = time.perf_counter()
         grids = []
         elapsed = []
-        for state in puzzle.solve(seed=seed, disp=disp, **options):
+        for state in puzzle.solve(
+            seed=seed, disp=disp, time_limit=time_limit, max_solutions=max_solutions, **options
+        ):
             # Solution.grids are kept full board-shaped (matching the
             # on-disk format) even though State.grid itself is compact --
             # expanding here, once per solution, keeps every other reader
@@ -242,12 +250,16 @@ class SolutionBook(UserDict):
         save: bool = True,
         path: str | Path = None,
         solutions_root: str | Path = SOLUTION_DIR,
+        time_limit: float = math.inf,
+        max_solutions: float = math.inf,
         **options,
     ) -> tuple["SolutionBook", "SolveStatsBook"]:
         """Solve every puzzle in a PuzzleBook and, by default, save the
         combined solutions and solve stats to a folder mirroring where
         the book itself was loaded from (see Solution.from_puzzle for
         the mirroring rule).
+
+        `time_limit` and `max_solutions` apply to each puzzle separately.
 
         Delegates per-puzzle solving to Solution.from_puzzle so the two
         entry points can't drift apart; only the batching and the single
@@ -264,6 +276,8 @@ class SolutionBook(UserDict):
                 puzzle,
                 seed=seed,
                 save=False,
+                time_limit=time_limit,
+                max_solutions=max_solutions,
                 **options,
             )
             # Individual puzzles carry their own Source, but this

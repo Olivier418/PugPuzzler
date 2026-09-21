@@ -35,7 +35,7 @@ def _config_label(options: dict) -> str:
     return "+".join(parts) if parts else "default"
 
 
-def _worker(puzzle: Puzzle, config: dict, seed: int, conn):
+def _worker(puzzle: Puzzle, config: dict, seed: int, T: float, conn):
     """Runs in a subprocess so a runaway search (e.g. every flag off on a
     puzzle with a huge search space) can be killed on a wall-clock
     deadline -- something a plain generator loop in the main process
@@ -49,14 +49,17 @@ def _worker(puzzle: Puzzle, config: dict, seed: int, conn):
     startup cost is already behind it (i.e. once this line actually
     starts running), so the parent knows exactly when to start its
     clock, then streams solutions as they're found, and gets
-    hard-killed by the parent once T is actually up.
+    hard-killed by the parent once T is actually up. The solver is also
+    handed `time_limit=T` (counted from its own first node), so it
+    normally stops by itself with a clean "done" a hair after the parent's
+    deadline; the kill is only the backstop.
 
     Sends back only the raw grid per solution -- the parent pairs each
     with its own arrival-time stamp to build the SolveStats.
     """
     try:
         conn.send(("ready", None))
-        for sol in puzzle.solve(disp=False, seed=seed, **config):
+        for sol in puzzle.solve(disp=False, seed=seed, time_limit=T, **config):
             # sol.grid is compact; Solution.grids (and the JSON they get
             # saved as) are full board-shaped, same as Solution.from_puzzle.
             conn.send(("solution", puzzle.setup.expand(sol.grid)))
@@ -76,7 +79,7 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> tuple
     duplicating that tracking in a benchmark-only class.
     """
     parent_conn, child_conn = multiprocessing.Pipe()
-    p = multiprocessing.Process(target=_worker, args=(puzzle, config, seed, child_conn))
+    p = multiprocessing.Process(target=_worker, args=(puzzle, config, seed, T, child_conn))
 
     grids: list[np.ndarray] = []
     elapsed: list[float] = []

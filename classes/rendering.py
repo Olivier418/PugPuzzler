@@ -51,13 +51,24 @@ def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray, print_le
                     nw, ne = padded[c-1, r-1] != OUTSIDE_BOARD, padded[c+1, r-1] != OUTSIDE_BOARD
                     sw, se = padded[c-1, r+1] != OUTSIDE_BOARD, padded[c+1, r+1] != OUTSIDE_BOARD
 
-                    if n and w:   char = '┏━'
+                    # a hole is a bracketed square; a notch open to the top/bottom is a U-shaped
+                    # slit in the edge: ┗┛ / ┏┓ in the notch itself, ┓┏ / ┛┗ in the wall cell
+                    # on its open side, so the board edge runs continuously around it
+                    if n and s and w and e: char = '[]'
+                    elif w and e and s:     char = '┗┛'
+                    elif w and e and n:     char = '┏┓'
+                    elif w and e:           char = '┏┓'  # middle of a taller hole
+                    elif n and s and w:     char = '┃ '
+                    elif n and s and e:     char = ' ┃'
+                    elif n and w: char = '┏━'
                     elif n and e: char = '━┓'
                     elif s and w: char = '┗━'
                     elif s and e: char = '━┛'
                     elif n or s:  char = '━━'
                     elif w:       char = '┃ '
                     elif e:       char = ' ┃'
+                    elif nw and ne: char = '┛┗'
+                    elif sw and se: char = '┓┏'
                     elif nw:      char = '┛ '
                     elif ne:      char = ' ┗'
                     elif sw:      char = '┓ '

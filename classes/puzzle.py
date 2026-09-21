@@ -2,6 +2,7 @@ import copy
 from collections import UserDict
 from functools import cached_property
 import itertools
+import math
 
 import numpy as np
 
@@ -409,15 +410,27 @@ class State:
             clone.name = rename
         return clone
 
-    def solve(self, seed: int = None, disp: bool = False, **options):
+    def solve(
+        self,
+        seed: int = None,
+        disp: bool = False,
+        time_limit: float = math.inf,
+        max_solutions: float = math.inf,
+        **options,
+    ):
         """Solve this game/puzzle, yielding each solution as its own Game
         (or Puzzle) copy, fully placed -- grid and chosen_placement_idx
         both correct and consistent, same as any other Game.
 
         `seed` randomises the order solutions are found in (never which
-        ones); `options` are forwarded to Solver.solve as-is."""
+        ones). Stops early once `time_limit` seconds have passed or
+        `max_solutions` have been found, whichever comes first (both
+        default to infinity). `options` are forwarded to Solver.solve
+        as-is."""
         solver = Solver(self)
-        for sol_idx, sol in enumerate(solver.solve(seed=seed, **options)):
+        for sol_idx, sol in enumerate(
+            solver.solve(seed=seed, time_limit=time_limit, max_solutions=max_solutions, **options)
+        ):
             if hasattr(sol, "name"):
                 sol.name = f"{self.name} (solution {sol_idx + 1})"
             if disp:

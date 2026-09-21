@@ -3,6 +3,7 @@
 No test reads or writes solutions/stats on disk; known solutions are
 written out literally in tests/data/ so they can be checked by eye."""
 import itertools
+import time
 import unittest
 
 import numpy as np
@@ -142,3 +143,55 @@ class TestEmptyBoards(unittest.TestCase):
                 self.assertEqual(len({s.grid.tobytes() for s in sols}), 25)
                 for s in sols:
                     assert_valid_solution(self, puzzle, s)
+
+
+class TestLimits(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.game = load("IQpuzzler")
+        cls.empty = cls.game.puzzles["empty_main"]
+        cls.puzzle = cls.game.books["main_puzzles"]["40"]
+        cls.all_grids = solver_grids(cls.puzzle)
+
+    def test_max_solutions(self):
+        sols = list(Solver(self.empty).solve(seed=0, max_solutions=5))
+        self.assertEqual(len(sols), 5)
+        self.assertEqual(len({s.grid.tobytes() for s in sols}), 5)
+        for s in sols:
+            assert_valid_solution(self, self.empty, s)
+
+    def test_max_solutions_one_is_a_real_solution(self):
+        sols = list(self.puzzle.solve(max_solutions=1))
+        self.assertEqual(len(sols), 1)
+        self.assertIn(self.puzzle.setup.expand(sols[0].grid).tobytes(), self.all_grids)
+
+    def test_max_solutions_zero_and_above_total(self):
+        self.assertEqual(list(self.puzzle.solve(max_solutions=0)), [])
+        n = len(self.all_grids)
+        self.assertEqual(len(list(self.puzzle.solve(max_solutions=n + 10))), n)
+
+    def test_time_limit(self):
+        start = time.perf_counter()
+        list(Solver(self.empty).solve(time_limit=0.5))
+        self.assertLess(time.perf_counter() - start, 5.0)
+
+    def test_time_limit_zero_yields_nothing(self):
+        self.assertEqual(list(self.puzzle.solve(time_limit=0)), [])
+
+    def test_first_limit_reached_wins(self):
+        by_count = list(Solver(self.empty).solve(seed=0, time_limit=60, max_solutions=3))
+        self.assertEqual(len(by_count), 3)
+        start = time.perf_counter()
+        list(Solver(self.empty).solve(time_limit=0.3, max_solutions=10**9))
+        self.assertLess(time.perf_counter() - start, 5.0)
+
+    def test_propagates_through_puzzle_and_solution(self):
+        self.assertEqual(len(list(self.empty.solve(seed=0, max_solutions=2))), 2)
+        solution, _ = Solution.from_puzzle(self.empty, seed=0, save=False, max_solutions=2)
+        self.assertEqual(len(solution.grids), 2)
+
+    def test_early_stop_leaves_solver_reusable(self):
+        solver = Solver(self.empty)
+        first = [s.grid.tobytes() for s in solver.solve(max_solutions=3)]
+        again = [s.grid.tobytes() for s in solver.solve(max_solutions=3)]
+        self.assertEqual(first, again)

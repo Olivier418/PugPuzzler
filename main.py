@@ -13,18 +13,21 @@ from Solver import Solver
 
 
 if __name__=="__main__":
-
     IQpuzzler = load_game("games/IQpuzzler")
-    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzler.books['main_puzzles'],disp=True)
-    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
-
     IQpuzzlerPRO = load_game("games/IQpuzzlerPRO")
-    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
-    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['alt_puzzles'],disp=True)
-    solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['pyramid_puzzles'],disp=True)
+    IQquub = load_game("games/IQquub")
 
-    # IQquub = load_game("games/IQquub")
-    # solution, stats = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
+    # solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzler.books['main_puzzles'],disp=True)
+    # solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzler.books['pyramid_puzzles'],disp=True)
+
+    # solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['main_puzzles'],disp=True)
+    # solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['alt_puzzles'],disp=True)
+    # solution_book, stats_book = SolutionBook.from_puzzlebook(IQpuzzlerPRO.books['pyramid_puzzles'],disp=True)
+
+
+    solution, stats = Solution.from_puzzle(IQquub.puzzles['89'],disp=True)
+    solution, stats = Solution.from_puzzle(IQquub.puzzles['90'],disp=True)
+    solution, stats = Solution.from_puzzle(IQquub.puzzles['120'],disp=True)
 
 
     # solution_folder = "solutions\\IQpuzzlerPRO\\books\\alt_puzzles\\result_1"
@@ -60,14 +63,14 @@ if __name__=="__main__":
     
     # EMPTY_MAIN = IQpuzzler.puzzles['empty_main']
     # stats_books, _ = run_benchmark(EMPTY_MAIN, nr_tests = 10, T=10)  # configs default to DEFAULT_CONFIGS
-    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_1')
+    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_2')
     # plot_benchmark(stats_books),
     # plt.show()
 
     
     # EMPTY_PYR = IQpuzzler.puzzles['empty_pyramid']
     # stats_books, _ = run_benchmark(EMPTY_PYR, nr_tests = 10, T=10)  # configs default to DEFAULT_CONFIGS
-    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_pyramid\\benchmark_1')
+    # stats_books = load_benchmark('benchmarks\\IQpuzzler\\puzzles\\empty_pyramid\\benchmark_2')
     # plot_benchmark(stats_books),
     # plt.show()
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+import time
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -212,8 +214,14 @@ class Solver:
         gids = gids[np.lexsort((self._priority[gids], *keys.T[::-1]))]
         return list(zip(self._block_of[gids].tolist(), gids.tolist()))
 
-    def solve(self, seed: int = None):
-        """Yield every solution as a fully placed copy of the game.
+    def solve(self, seed: int = None, time_limit: float = math.inf, max_solutions: float = math.inf):
+        """Yield every solution as a fully placed copy of the game, or --
+        if a limit is hit first -- just the ones found by then.
+
+        `time_limit` (seconds, counted from the first `next()`) and
+        `max_solutions` both default to infinity; the search stops as soon
+        as either is reached. The time is checked once per search node, so
+        it can overshoot by about one node.
 
         `seed` randomises the order solutions are found in without
         changing the set: it draws one random priority per placement and
@@ -231,14 +239,27 @@ class Solver:
             self._priority = rng.permutation(n_total)
             self._cell_priority = rng.permutation(n_cells)
 
+        deadline = time.perf_counter() + time_limit
+        found = 0
+        stopped = max_solutions <= 0
+
         def rec(live, bcount, cell_count, available_spots):
             """`live`/`bcount`/`cell_count` are a valid node (see
             _root_node), already pruned against `available_spots`, and
             owned by this call."""
+            nonlocal found, stopped
+            if stopped or time.perf_counter() >= deadline:
+                # Sticky, so every caller up the stack unwinds too (each
+                # undoing its own placement on the way out).
+                stopped = True
+                return
+
             if bcount.min() == _DONE:
                 # A full Game snapshot, independent of self.game (which
                 # keeps getting mutated as the search backtracks further).
                 yield self.game.copy()
+                found += 1
+                stopped = found >= max_solutions
                 return
 
             candidates = self._cell_branch_candidates(live, available_spots, cell_count)
