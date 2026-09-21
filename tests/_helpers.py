@@ -35,10 +35,10 @@ def assert_valid_solution(test, puzzle, state):
     test.assertFalse((state.grid == EMPTY).any(), "empty cell left")
     for idx, p in state.chosen_placement_idx.items():
         test.assertNotEqual(p, UNPLACED, f"block {idx} not placed")
-        cells = state.placements[idx][p]
+        cells = state.placement_cells[idx][p]
         test.assertTrue((state.grid[cells] == idx).all(), f"block {idx} grid/placement mismatch")
     # every cell is covered by exactly one block's placement
-    covered = np.concatenate([state.placements[i][p] for i, p in state.chosen_placement_idx.items()])
+    covered = np.concatenate([state.placement_cells[i][p] for i, p in state.chosen_placement_idx.items()])
     test.assertEqual(len(covered), len(set(covered.tolist())), "blocks overlap")
     test.assertEqual(len(covered), state.setup.n_cells, "board not fully covered")
     # the puzzle's pre-filled cells are untouched

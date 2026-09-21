@@ -1,3 +1,5 @@
+from pathlib import Path
+
 EMPTY = -1           # grid cell: on the board, nothing placed there yet
 OUTSIDE_BOARD = -2   # grid cell: not part of the board at all
 UNPLACED = -1        # chosen_placement_idx: this block hasn't been placed
@@ -16,6 +18,6 @@ UNKNOWN_DIFFICULTY_COLOR = "#999999"  # puzzles without a "difficulty" (e.g. the
 # out in the order the configs are plotted (and cycled if there are more).
 CONFIG_PALETTE = ["#4FA3D1", "#F76773", "#FFDD87", "#CCD88B"]
 
-SOLUTION_DIR = "solutions"
-BENCHMARK_DIR = "benchmarks"
-GAMES_DIR = "games"
+SOLUTION_DIR = Path("solutions")
+BENCHMARK_DIR = Path("benchmarks")
+GAMES_DIR = Path("games")

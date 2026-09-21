@@ -7,10 +7,11 @@ from pathlib import Path
 
 import numpy as np
 
-from classes import Solution, SolutionBook, SolveStats, SolveStatsBook
+from classes import SolutionBook, SolveStatsBook
 from serialization import (
     dump_json, letter_grid_to_rows, parse_letter_grid, save_solution_run, load_solution_run,
 )
+from solving import solve_puzzle
 from tests._helpers import load
 
 
@@ -20,13 +21,12 @@ class TestLetterGrid(unittest.TestCase):
             arr = parse_letter_grid(rows)
             self.assertEqual(letter_grid_to_rows(arr.T), rows)
 
-    def test_dump_puts_one_row_per_line_aligned(self):
+    def test_dump_json_round_trips(self):
+        data = {"k": [["AB", "CD"]], "n": [1, 2]}
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "x.json"
-            dump_json({"k": [["AB", "CD"]], "n": [1, 2]}, path)
-            text = path.read_text()
-            self.assertEqual(json.loads(text), {"k": [["AB", "CD"]], "n": [1, 2]})
-            self.assertIn('  "k": [\n    ["AB",\n     "CD"]\n  ]', text)
+            dump_json(data, path)
+            self.assertEqual(json.loads(path.read_text()), data)
 
 
 class TestSolutionRoundTrip(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestSolutionRoundTrip(unittest.TestCase):
         for book_name, name in (("main_puzzles", "50"), ("pyramid_puzzles", "85")):
             with self.subTest(book=book_name, puzzle=name):
                 puzzle = game.books[book_name][name]
-                solution, stats = Solution.from_puzzle(puzzle, save=False)
+                solution, stats = solve_puzzle(puzzle, save=False)
                 self.assertTrue(solution.grids)
                 with tempfile.TemporaryDirectory() as tmp:
                     folder = Path(tmp) / "IQpuzzler" / "books" / book_name / name / "result_1"

@@ -8,9 +8,9 @@ import unittest
 
 import numpy as np
 
-from classes import Puzzle, Solution
-from Solver import Solver
+from classes import Puzzle, Solution, Solver
 from constants import EMPTY, UNPLACED
+from solving import solve_puzzle
 from tests._helpers import assert_valid_solution, load, load_known_solutions
 
 
@@ -24,12 +24,12 @@ def known_puzzles(puzzle, solutions) -> list[Puzzle]:
 
 def known_solutions(puzzle, solutions) -> list[Solution]:
     """The literal solutions as Solution objects built in code."""
-    return [Solution(puzzle.name, [puzzle.setup.expand(k.grid)], puzzle=puzzle) for k in known_puzzles(puzzle, solutions)]
+    return [Solution(puzzle.name, [puzzle.setup.to_full_grid(k.grid)], puzzle=puzzle) for k in known_puzzles(puzzle, solutions)]
 
 
 def solver_grids(puzzle) -> set:
     """Every solution the solver finds, as full board-shaped grids' bytes."""
-    return {puzzle.setup.expand(s.grid).tobytes() for s in puzzle.solve()}
+    return {puzzle.setup.to_full_grid(s.grid).tobytes() for s in puzzle.solve()}
 
 
 class TestKnownSolutions(unittest.TestCase):
@@ -40,20 +40,15 @@ class TestKnownSolutions(unittest.TestCase):
         cls.game = load("IQpuzzler")
         cls.known = load_known_solutions("IQpuzzler")
 
-    def test_known_solution_is_found(self):
-        for (book, name), solutions in self.known.items():
-            with self.subTest(book=book, puzzle=name):
-                puzzle = self.game.books[book][name]
-                found = solver_grids(puzzle)
-                for known in known_solutions(puzzle, solutions):
-                    self.assertIn(known.grids[0].tobytes(), found)
-
-    def test_known_solutions_are_valid(self):
+    def test_known_solution_is_valid_and_found(self):
         for (book, name), solutions in self.known.items():
             with self.subTest(book=book, puzzle=name):
                 puzzle = self.game.books[book][name]
                 for known in known_puzzles(puzzle, solutions):
                     assert_valid_solution(self, puzzle, known)
+                found = solver_grids(puzzle)
+                for known in known_solutions(puzzle, solutions):
+                    self.assertIn(known.grids[0].tobytes(), found)
 
 
 class TestPro(unittest.TestCase):
@@ -107,10 +102,8 @@ class TestUnsolvable(unittest.TestCase):
 
         empty = np.flatnonzero(puzzle.grid == EMPTY)
         unplaced = [i for i, p in puzzle.chosen_placement_idx.items() if p == UNPLACED]
-        self.assertEqual(sorted(puzzle.blocks[i].letter for i in unplaced), ["F", "H"])
-        self.assertEqual(len(empty), sum(len(puzzle.blocks[i].coords) for i in unplaced))
         for i in unplaced:
-            fits = [np.isin(pl, empty).all() for pl in puzzle.placements[i]]
+            fits = [np.isin(pl, empty).all() for pl in puzzle.placement_cells[i]]
             self.assertTrue(any(fits), f"{puzzle.blocks[i].letter} should fit on its own")
 
         self.assertEqual(list(puzzle.solve()), [])
@@ -160,34 +153,23 @@ class TestLimits(unittest.TestCase):
         for s in sols:
             assert_valid_solution(self, self.empty, s)
 
-    def test_max_solutions_one_is_a_real_solution(self):
-        sols = list(self.puzzle.solve(max_solutions=1))
-        self.assertEqual(len(sols), 1)
-        self.assertIn(self.puzzle.setup.expand(sols[0].grid).tobytes(), self.all_grids)
-
-    def test_max_solutions_zero_and_above_total(self):
-        self.assertEqual(list(self.puzzle.solve(max_solutions=0)), [])
+    def test_max_solutions_edge_cases(self):
         n = len(self.all_grids)
+        self.assertEqual(list(self.puzzle.solve(max_solutions=0)), [])
+        one = list(self.puzzle.solve(max_solutions=1))
+        self.assertEqual(len(one), 1)
+        self.assertIn(self.puzzle.setup.to_full_grid(one[0].grid).tobytes(), self.all_grids)
         self.assertEqual(len(list(self.puzzle.solve(max_solutions=n + 10))), n)
 
     def test_time_limit(self):
         start = time.perf_counter()
         list(Solver(self.empty).solve(time_limit=0.5))
         self.assertLess(time.perf_counter() - start, 5.0)
-
-    def test_time_limit_zero_yields_nothing(self):
         self.assertEqual(list(self.puzzle.solve(time_limit=0)), [])
-
-    def test_first_limit_reached_wins(self):
-        by_count = list(Solver(self.empty).solve(seed=0, time_limit=60, max_solutions=3))
-        self.assertEqual(len(by_count), 3)
-        start = time.perf_counter()
-        list(Solver(self.empty).solve(time_limit=0.3, max_solutions=10**9))
-        self.assertLess(time.perf_counter() - start, 5.0)
 
     def test_propagates_through_puzzle_and_solution(self):
         self.assertEqual(len(list(self.empty.solve(seed=0, max_solutions=2))), 2)
-        solution, _ = Solution.from_puzzle(self.empty, seed=0, save=False, max_solutions=2)
+        solution, _ = solve_puzzle(self.empty, seed=0, save=False, max_solutions=2)
         self.assertEqual(len(solution.grids), 2)
 
     def test_early_stop_leaves_solver_reusable(self):

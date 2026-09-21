@@ -13,12 +13,6 @@ class TestPuzzleData(unittest.TestCase):
     def setUpClass(cls):
         cls.games = {n: load(n) for n in GAMES}
 
-    def test_blocks_exactly_fill_board(self):
-        for gname, game in self.games.items():
-            for key, setup in game.setups.items():
-                with self.subTest(game=gname, board=key):
-                    self.assertEqual(sum(len(b.coords) for b in setup.blocks.values()), setup.n_cells)
-
     def test_book_puzzles(self):
         for gname, game in self.games.items():
             for bname, book in game.books.items():

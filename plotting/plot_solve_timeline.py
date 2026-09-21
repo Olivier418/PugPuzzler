@@ -4,7 +4,8 @@ from matplotlib.patches import Rectangle
 from constants import DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 from classes import SolutionBook
-from classes.solutions import SolveStatsBook
+from serialization import solution_puzzle_info
+from classes import SolveStatsBook
 
 
 def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=None, ax: plt.Axes = None) -> plt.Axes:
@@ -23,12 +24,12 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
     produced alongside `solutions` by the same solve call -- it's
     solver-run metadata, not part of the solutions themselves.
     difficulty is the source Puzzle's, not the Solution's own -- see
-    Solution.puzzle_info. Pass `puzzles` (e.g. the PuzzleBook `solutions`
+    serialization.solution_puzzle_info. Pass `puzzles` (e.g. the PuzzleBook `solutions`
     was solved from) when one is in memory; otherwise each is resolved
     from its puzzle's JSON on disk.
     """
     solved_puzzles = list(solutions.values())
-    difficulty_by_name = {sol.puzzle_name: sol.puzzle_info(puzzles).difficulty for sol in solved_puzzles}
+    difficulty_by_name = {sol.puzzle_name: solution_puzzle_info(sol, puzzles).difficulty for sol in solved_puzzles}
 
     # order columns: group by difficulty (in DIFFICULTY_COLORS order);
     # within a group, preserve the original order the puzzles appear in

@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from constants import DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 from classes import SolutionBook
+from serialization import solution_puzzle_info
 
 
 def plot_difficulty_space(solutions: SolutionBook, puzzles=None, ax: plt.Axes = None) -> plt.Axes:
@@ -9,12 +10,12 @@ def plot_difficulty_space(solutions: SolutionBook, puzzles=None, ax: plt.Axes = 
     puzzle, y = number of solutions found, colored by difficulty.
 
     difficulty/empty-cell count are the source Puzzle's, not the
-    Solution's own -- see Solution.puzzle_info. Pass `puzzles` (e.g. the
+    Solution's own -- see serialization.solution_puzzle_info. Pass `puzzles` (e.g. the
     PuzzleBook `solutions` was solved from) when one is in memory;
     otherwise each is resolved from its puzzle's JSON on disk.
     """
     sols = list(solutions.values())
-    infos = [sol.puzzle_info(puzzles) for sol in sols]
+    infos = [solution_puzzle_info(sol, puzzles) for sol in sols]
 
     labels = [sol.puzzle_name for sol in sols]
     colors = [DIFFICULTY_COLORS.get(info.difficulty, UNKNOWN_DIFFICULTY_COLOR) for info in infos]
