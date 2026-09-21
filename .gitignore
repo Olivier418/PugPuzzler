@@ -1,2 +1,6 @@
-/benchmark_results
-/__pycache__
+__pycache__/
+*.pyc
+solutions/
+benchmarks/
+CLAUDE.md
+SYMMETRY_NOTES.md

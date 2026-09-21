@@ -4,10 +4,12 @@ from pathlib import Path
 import numpy as np
 from colorama import Back, Fore, Style
 
-from classes import Setup, Game, Puzzle, PuzzleBook, Block, BlockCollection, Board, RegularBoard, PyramidBoard
-from classes.source import Source
-from classes.solutions import PuzzleInfo
+from classes import (
+    Block, BlockCollection, Board, Game, PuzzleInfo, Puzzle, PuzzleBook, PyramidBoard,
+    RegularBoard, Setup, Solution, Source, State,
+)
 from constants import GAMES_DIR
+from .jsonio import parse_letter_grid
 
 
 def load_blocks(json_path: Path | str) -> BlockCollection:
@@ -46,13 +48,14 @@ def _cells_from_json(raw_cells: list) -> np.ndarray:
     which unpacks width, depth = shape[0], shape[1]).
 
     'cells' is authored the same human-readable way as a Puzzle letter
-    grid: one JSON row per depth position, `width` entries per row -- i.e.
-    literally shape (depth, width) as written. Puzzle._initialize_grid
+    grid: one row string per depth position ("X" = board cell, " " = not),
+    `width` characters per row -- i.e. literally shape (depth, width) as
+    written. Puzzle._initialize_grid
     already transposes a letter grid for exactly this reason; board cells
     need the identical, one-time transpose here, at the JSON boundary,
     rather than compensating for it downstream.
     """
-    return np.array(raw_cells, dtype=bool).T
+    return (parse_letter_grid(raw_cells) == "X").T
 
 
 def _parse_board(data: dict) -> Board:
@@ -67,22 +70,27 @@ def _parse_board(data: dict) -> Board:
         return RegularBoard(width=data["width"], depth=data["depth"])
 
     if board_type == "PyramidBoard":
-        if "cells" in data:
-            return PyramidBoard(cells=_cells_from_json(data["cells"]))
-        # Default PyramidBoard construction using base dimensions
-        width = data.get("width", 5)
-        depth = data.get("height", 5)
-        return PyramidBoard(width, depth)
+        return PyramidBoard(width=data.get("width", 5), depth=data.get("depth", 5))
 
     raise ValueError(f"Unsupported board type: '{board_type}'")
 
 
-def grid_to_letter_rows(setup: Setup, grid: np.ndarray, empty: str = " ") -> list[list[str]]:
-    """Inverse of Puzzle._initialize_grid: numeric grid -> row-major letters."""
-    letter_arr = np.full(grid.shape, empty, dtype="<U1")
-    for idx, block in setup.blocks.items():
-        letter_arr[grid == idx] = block.letter
-    return letter_arr.T.tolist()  # undo the transpose applied on load
+def _read_book_file(json_file: Path) -> tuple[str, list[dict]]:
+    """(board_key, puzzle entries) of a books/*.json file, which is either
+    `{"board": key, "puzzles": [...]}` or -- for the default "main"
+    board -- just the bare list of puzzles."""
+    with open(json_file, "r") as f:
+        content = json.load(f)
+    if isinstance(content, dict):
+        return content.get("board", "main"), content["puzzles"]
+    return "main", content
+
+
+def _read_puzzle_file(json_file: Path) -> tuple[str, dict]:
+    """(board_key, entry) of a standalone puzzles/*.json file."""
+    with open(json_file, "r") as f:
+        item = json.load(f)
+    return item.get("board", "main"), item
 
 
 def load_game(dir_path: Path | str) -> Game:
@@ -109,23 +117,14 @@ def load_game(dir_path: Path | str) -> Game:
     loaded_books = []
     if books_dir.is_dir():
         for json_file in books_dir.glob("*.json"):
-            with open(json_file, "r") as f:
-                content = json.load(f)
-
-            if isinstance(content, dict):
-                book_name = json_file.stem
-                board_key = content["board"]
-                puzzle_data = content["puzzles"]
-            else:
-                book_name = json_file.stem
-                board_key = "main"
-                puzzle_data = content
+            book_name = json_file.stem
+            board_key, puzzle_data = _read_book_file(json_file)
 
             setup = setups[board_key]
             puzzles = [
                 Puzzle(
                     setup,
-                    np.array(item["grid"], dtype=str) if "grid" in item else None,
+                    parse_letter_grid(item["grid"]) if "grid" in item else None,
                     name=item["name"],
                     difficulty=item.get("difficulty"),
                 )
@@ -134,7 +133,7 @@ def load_game(dir_path: Path | str) -> Game:
             book = PuzzleBook(*puzzles, name=book_name)
 
             # Record where this book -- and each puzzle inside it -- came
-            # from, so Solution.from_puzzle/from_puzzlebook can later save
+            # from, so solving.solve_puzzle/solve_puzzlebook can later save
             # results to a mirrored solutions/ path automatically.
             book.source = Source(game_name=game_name, book_name=book_name)
             for p in puzzles:
@@ -147,12 +146,9 @@ def load_game(dir_path: Path | str) -> Game:
     loaded_puzzles = []
     if puzzles_dir.is_dir():
         for json_file in puzzles_dir.glob("*.json"):
-            with open(json_file, "r") as f:
-                item = json.load(f)
-
-            board_key = item.get("board", "main")
+            board_key, item = _read_puzzle_file(json_file)
             setup = setups[board_key]
-            grid = np.array(item["grid"], dtype=str) if "grid" in item else None
+            grid = parse_letter_grid(item["grid"]) if "grid" in item else None
             name = json_file.stem
 
             puzzle = Puzzle(
@@ -180,30 +176,20 @@ def load_setup_for_puzzle(
 ) -> Setup:
     """Builds Setup on-demand from canonical game/book/puzzle IDs.
 
-    Only used as a cold-start fallback -- see Solution.to_states -- for
-    when a Solution is loaded back from a bare solutions.json with no
-    live Puzzle/PuzzleBook (and thus no live Setup) in memory.
+    Cold-start fallback for a Solution loaded back from a bare
+    solutions.json with no live Puzzle/PuzzleBook (and thus no live
+    Setup) in memory -- see solution_states.
     """
     game_dir = Path(games_root) / game_name
-
-    # 1. Load block collection
     blocks = load_blocks(game_dir / "blocks.json")
 
-    # 2. Determine target board key
     if book_name:
-        target_file = game_dir / "books" / f"{book_name}.json"
-        with open(target_file, "r") as f:
-            content = json.load(f)
-        board_key = content.get("board", "main") if isinstance(content, dict) else "main"
+        board_key, _ = _read_book_file(game_dir / "books" / f"{book_name}.json")
     elif puzzle_name:
-        target_file = game_dir / "puzzles" / f"{puzzle_name}.json"
-        with open(target_file, "r") as f:
-            content = json.load(f)
-        board_key = content.get("board", "main")
+        board_key, _ = _read_puzzle_file(game_dir / "puzzles" / f"{puzzle_name}.json")
     else:
         board_key = "main"
 
-    # 3. Load board config and return Setup
     boards = load_boards(game_dir / "boards.json")
     return Setup(blocks, boards[board_key])
 
@@ -223,30 +209,54 @@ def load_puzzle_info_for_puzzle(
     none, the board's cell count from boards.json, which is cheap on its
     own -- it's specifically placement computation that's expensive).
 
-    Only used as a cold-start fallback -- see Solution.puzzle_info -- for
-    when a Solution has no live Puzzle/PuzzleBook in memory to read
-    difficulty/nr_empty_spaces off of directly.
+    Cold-start fallback -- see solution_puzzle_info.
     """
     game_dir = Path(games_root) / game_name
 
     if book_name:
-        with open(game_dir / "books" / f"{book_name}.json", "r") as f:
-            content = json.load(f)
-        board_key = content.get("board", "main") if isinstance(content, dict) else "main"
-        puzzle_data = content["puzzles"] if isinstance(content, dict) else content
+        board_key, puzzle_data = _read_book_file(game_dir / "books" / f"{book_name}.json")
         item = next(p for p in puzzle_data if p["name"] == puzzle_name)
     else:
-        with open(game_dir / "puzzles" / f"{puzzle_name}.json", "r") as f:
-            item = json.load(f)
-        board_key = item.get("board", "main")
-
-    difficulty = item.get("difficulty")
+        board_key, item = _read_puzzle_file(game_dir / "puzzles" / f"{puzzle_name}.json")
 
     if "grid" in item:
-        grid = np.array(item["grid"], dtype=str)
-        nr_empty_spaces = int((grid == " ").sum())
+        nr_empty_spaces = int((parse_letter_grid(item["grid"]) == " ").sum())
     else:
-        boards = load_boards(game_dir / "boards.json")
-        nr_empty_spaces = int(boards[board_key].cells.sum())
+        nr_empty_spaces = int(load_boards(game_dir / "boards.json")[board_key].cells.sum())
 
-    return PuzzleInfo(difficulty=difficulty, nr_empty_spaces=nr_empty_spaces)
+    return PuzzleInfo(difficulty=item.get("difficulty"), nr_empty_spaces=nr_empty_spaces)
+
+
+def solution_states(solution: Solution, games_root: str | Path = GAMES_DIR) -> list[State]:
+    """Hydrate a Solution's grids into States: with the live puzzle's
+    Setup if it has one, else by rebuilding the Setup from the game files
+    (the expensive path, for a Solution loaded from a bare solutions.json)."""
+    setup = solution.setup
+    if setup is None:
+        if not solution.game_name:
+            raise ValueError("Cannot resolve Setup without game_name.")
+        setup = load_setup_for_puzzle(
+            game_name=solution.game_name,
+            book_name=solution.book_name,
+            puzzle_name=solution.puzzle_name,
+            games_root=games_root,
+        )
+    return solution.to_states(setup)
+
+
+def solution_puzzle_info(solution: Solution, puzzles=None, games_root: str | Path = GAMES_DIR) -> PuzzleInfo:
+    """The source Puzzle's difficulty/empty-cell count for a Solution:
+    from the live puzzle or `puzzles` (a PuzzleBook, or any
+    puzzle_name -> Puzzle mapping) when there is one, else read straight
+    from the game's JSON via the Solution's game/book/puzzle IDs -- which,
+    unlike solution_states, never needs the placement computation."""
+    if solution.puzzle is not None or (puzzles is not None and solution.puzzle_name in puzzles):
+        return solution.puzzle_info(puzzles)
+    if not solution.game_name:
+        raise ValueError("Cannot resolve puzzle info without game_name.")
+    return load_puzzle_info_for_puzzle(
+        game_name=solution.game_name,
+        book_name=solution.book_name,
+        puzzle_name=solution.puzzle_name,
+        games_root=games_root,
+    )

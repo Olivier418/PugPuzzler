@@ -1,6 +1,8 @@
 from ._utils import _assert_unique, _shared
 from .blocks import BlockCollection
-from .puzzle import Puzzle, PuzzleBook, Setup
+from .puzzlebook import PuzzleBook
+from .setup import Setup
+from .state import Puzzle
 
 
 class Game:

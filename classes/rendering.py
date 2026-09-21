@@ -1,5 +1,5 @@
 """Terminal rendering for boards/blocks -- kept separate from `Setup`
-(classes/puzzle.py) since this is a display concern, not part of the
+(classes/setup.py) since this is a display concern, not part of the
 board/blocks/placements model itself. `Setup.render` is a thin
 delegator to `render` below; everything here operates on plain
 `Board`/`BlockCollection`/grid arguments so it has no dependency on
@@ -13,7 +13,7 @@ from .blocks import Block, BlockCollection
 from .boards import Board
 
 
-def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray, print_letters: bool = True) -> list[str]:
+def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray) -> list[str]:
     """Render any grid shaped like `board` -- a State's own grid, a
     solved grid from Solver, or otherwise -- into a list of
     terminal-ready row strings (one per output row, already colored)."""
@@ -43,7 +43,7 @@ def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray, print_le
                 if cell == EMPTY:
                     row_chars.append('  ')
                 elif cell >= 0:
-                    txt = f"{blocks[cell].letter} " if print_letters else "  "
+                    txt = f"{blocks[cell].letter} "
                     row_chars.append(f"{blocks[cell].terminal_color}{txt}{Style.RESET_ALL}")
                 else:  # cell == OUTSIDE_BOARD
                     n, s = padded[c, r-1] != OUTSIDE_BOARD, padded[c, r+1] != OUTSIDE_BOARD
@@ -51,13 +51,24 @@ def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray, print_le
                     nw, ne = padded[c-1, r-1] != OUTSIDE_BOARD, padded[c+1, r-1] != OUTSIDE_BOARD
                     sw, se = padded[c-1, r+1] != OUTSIDE_BOARD, padded[c+1, r+1] != OUTSIDE_BOARD
 
-                    if n and w:   char = '┏━'
+                    # a hole is a bracketed square; a notch open to the top/bottom is a U-shaped
+                    # slit in the edge: ┗┛ / ┏┓ in the notch itself, ┓┏ / ┛┗ in the wall cell
+                    # on its open side, so the board edge runs continuously around it
+                    if n and s and w and e: char = '[]'
+                    elif w and e and s:     char = '┗┛'
+                    elif w and e and n:     char = '┏┓'
+                    elif w and e:           char = '┃┃'  # middle of a taller hole
+                    elif n and s and w:     char = '┃ '
+                    elif n and s and e:     char = ' ┃'
+                    elif n and w: char = '┏━'
                     elif n and e: char = '━┓'
                     elif s and w: char = '┗━'
                     elif s and e: char = '━┛'
                     elif n or s:  char = '━━'
                     elif w:       char = '┃ '
                     elif e:       char = ' ┃'
+                    elif nw and ne: char = '┛┗'
+                    elif sw and se: char = '┓┏'
                     elif nw:      char = '┛ '
                     elif ne:      char = ' ┗'
                     elif sw:      char = '┓ '
@@ -72,7 +83,7 @@ def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray, print_le
     return ['  '.join(row_tuple) for row_tuple in zip(*layer_strings)]
 
 
-def block_shape_lines(block: Block, print_letters: bool = True) -> tuple[list[str], int]:
+def block_shape_lines(block: Block) -> tuple[list[str], int]:
     """Render a single block's own shape (from its `coords`, not any
     board) as a small standalone diagram: same 2-char-per-cell,
     colored-letter style as `grid_lines`, but a tight bounding box with
@@ -97,7 +108,7 @@ def block_shape_lines(block: Block, print_letters: bool = True) -> tuple[list[st
             row_chars = []
             for c in range(width):
                 if layer[c, r]:
-                    txt = f"{block.letter} " if print_letters else "  "
+                    txt = f"{block.letter} "
                     row_chars.append(f"{block.terminal_color}{txt}{Style.RESET_ALL}")
                 else:
                     row_chars.append('  ')
@@ -111,14 +122,13 @@ def block_shape_lines(block: Block, print_letters: bool = True) -> tuple[list[st
 def legend_lines(
     blocks: BlockCollection,
     block_idcs,
-    print_letters: bool = True,
     max_width_cells: int = None,
 ) -> list[str]:
     """Arrange the shape diagrams of several blocks (e.g. a State's
     unplaced blocks) side by side in a row, wrapping onto further rows
     once `max_width_cells` (in 2-char cell units) would be exceeded --
     used to lay unplaced blocks out underneath the board."""
-    entries = [block_shape_lines(blocks[idx], print_letters) for idx in sorted(block_idcs)]
+    entries = [block_shape_lines(blocks[idx]) for idx in sorted(block_idcs)]
     if not entries:
         return []
 
@@ -149,16 +159,15 @@ def render(
     grid: np.ndarray,
     header: str = None,
     leftover_idcs=None,
-    print_letters: bool = True,
 ) -> str:
     """Build the full text representation used by every `__repr__` that
     displays a board: an optional header, then the board, and -- when
     `leftover_idcs` is given -- shape diagrams of those blocks laid out
     underneath the board."""
-    lines = grid_lines(board, blocks, grid, print_letters=print_letters)
+    lines = grid_lines(board, blocks, grid)
 
     if leftover_idcs:
-        legend = legend_lines(blocks, leftover_idcs, print_letters=print_letters)
+        legend = legend_lines(blocks, leftover_idcs)
         if legend:
             lines = lines + [''] + legend
 

@@ -18,8 +18,8 @@ class Lattice:
         used to test distances/orthogonality in pure integer arithmetic.
       - unit_vectors: every integer combination of basis vectors that
         has unit length - i.e. every direction a block can step in.
-      - neighbor_structure: the boolean stencil of which grid cells
-        (offset by -1/0/1 along each axis) count as adjacent.
+      - point_group: every rotation/reflection that maps the lattice
+        onto itself, as integer matrices.
 
     Only lattices with at most 3 axes are supported. Beyond 3 axes, an
     arbitrary offset adjacency matrix is no longer guaranteed to
@@ -79,12 +79,25 @@ class Lattice:
         return vectors
 
     @cached_property
-    def neighbor_structure(self) -> np.ndarray:
-        """Boolean (3,)*ndim stencil marking which offsets (in -1/0/1 per
-        axis, indexed 0/1/2) count as adjacent to the center cell.
+    def point_group(self) -> np.ndarray:
+        """Every integer matrix M with M^T @ gram2 @ M == gram2, stacked as
+        (K, ndim, ndim) -- i.e. every rotation/reflection about the origin
+        that maps this lattice onto itself. Built from unit_vectors, since
+        a lattice isometry must send each basis vector to some unit vector.
+
+        Pure lattice geometry: it says nothing about which cells a board
+        actually has, so it's the same for every board on this lattice.
+        Consumers intersect it with a specific cell set -- see
+        Setup.region_symmetries. Always contains the identity (the standard
+        basis vectors are unit-length by construction, gram2's diagonal
+        being all 2s).
         """
-        structure = np.zeros((3,) * self.ndim, dtype=bool)
-        structure[(1,) * self.ndim] = True
-        for v in self.unit_vectors:
-            structure[tuple(v + 1)] = True
-        return structure
+        gram2 = self.gram2
+        matrices = [
+            np.column_stack(cols)
+            for cols in itertools.product(self.unit_vectors, repeat=self.ndim)
+        ]
+        return np.array(
+            [M for M in matrices if np.array_equal(M.T @ gram2 @ M, gram2)],
+            dtype=np.int64,
+        )

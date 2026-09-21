@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from constants import DIFFICULTY_COLORS
+from constants import DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 from classes import SolutionBook
-from classes.solutions import SolveStatsBook
+from serialization import solution_puzzle_info
+from classes import SolveStatsBook
 
 
 def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=None, ax: plt.Axes = None) -> plt.Axes:
@@ -23,12 +24,12 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
     produced alongside `solutions` by the same solve call -- it's
     solver-run metadata, not part of the solutions themselves.
     difficulty is the source Puzzle's, not the Solution's own -- see
-    Solution.puzzle_info. Pass `puzzles` (e.g. the PuzzleBook `solutions`
+    serialization.solution_puzzle_info. Pass `puzzles` (e.g. the PuzzleBook `solutions`
     was solved from) when one is in memory; otherwise each is resolved
     from its puzzle's JSON on disk.
     """
     solved_puzzles = list(solutions.values())
-    difficulty_by_name = {sol.puzzle_name: sol.puzzle_info(puzzles).difficulty for sol in solved_puzzles}
+    difficulty_by_name = {sol.puzzle_name: solution_puzzle_info(sol, puzzles).difficulty for sol in solved_puzzles}
 
     # order columns: group by difficulty (in DIFFICULTY_COLORS order);
     # within a group, preserve the original order the puzzles appear in
@@ -62,7 +63,7 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
     eps = min(positive_times) / 10 if positive_times else 1e-3
 
     for sol, x in zip(solved_puzzles, x_positions):
-        color = DIFFICULTY_COLORS[difficulty_by_name[sol.puzzle_name]]
+        color = DIFFICULTY_COLORS.get(difficulty_by_name[sol.puzzle_name], UNKNOWN_DIFFICULTY_COLOR)
         times = sorted(max(t, eps) for t in stats[sol.puzzle_name].elapsed)
 
         duration = max(stats[sol.puzzle_name].duration, eps)
@@ -84,7 +85,7 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
     ax.set_xticklabels([sol.puzzle_name for sol in solved_puzzles],
                         rotation=30, ha="right", rotation_mode="anchor")
     for tick_label, sol in zip(ax.get_xticklabels(), solved_puzzles):
-        tick_label.set_color(DIFFICULTY_COLORS[difficulty_by_name[sol.puzzle_name]])
+        tick_label.set_color(DIFFICULTY_COLORS.get(difficulty_by_name[sol.puzzle_name], UNKNOWN_DIFFICULTY_COLOR))
 
     ax.set_xlim(x_positions[0] - 1, x_positions[-1] + 1)
 
