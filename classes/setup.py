@@ -129,9 +129,9 @@ class Setup:
 
     # ---- symmetry -------------------------------------------------------
     # Pure geometry, all lazily built: a solve that doesn't ask for
-    # symmetry (branching="cell") never pays for any of it. Everything
-    # here is shared by reference across every Puzzle in a book, like
-    # placements.
+    # symmetry (symmetry=False without up_to_symmetry) never pays for any
+    # of it. Everything here is shared by reference across every Puzzle in
+    # a book, like placements.
 
     @cached_property
     def cell_coords(self) -> np.ndarray:

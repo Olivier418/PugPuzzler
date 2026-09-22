@@ -124,7 +124,7 @@ class State:
         rather than left in `options` for benchmark.py to treat as a
         solver config.
 
-        `options` (`branching`, `symmetry`) are forwarded to Solver.solve
+        `options` (`symmetry`, `order`) are forwarded to Solver.solve
         as-is; they never change the solution set, only how fast and in
         what order it arrives."""
         solver = Solver(self)

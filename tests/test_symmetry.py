@@ -17,13 +17,13 @@ from constants import EMPTY
 from tests._helpers import assert_valid_solution, load
 
 
-# Every (branching, symmetry) pair, plus candidate ordering forced on and
-# off. None of them may change the solution set.
+# The orbit reduction on and off, plus candidate ordering forced on and
+# off. None of them may change the solution set. `symmetry=False` is the
+# independent baseline the rest are checked against: it never derives a
+# solution from another, it enumerates them all.
 MODES = [
-    {"branching": branching, "symmetry": symmetry}
-    for branching in ("item", "cell", "block", "hybrid")
-    for symmetry in (False, True)
-] + [{"order": True}, {"order": False}]
+    {"symmetry": False}, {"symmetry": True}, {"order": True}, {"order": False}
+]
 
 PENTOMINOES = {
     "F": [".XX", "XX.", ".X."], "I": ["XXXXX"],        "L": ["X.", "X.", "X.", "XX"],
@@ -96,7 +96,7 @@ class TestGeometry(unittest.TestCase):
 
 
 class TestModesAgree(unittest.TestCase):
-    """branching and symmetry change the route, never the destination."""
+    """symmetry and ordering change the route, never the destination."""
 
     @classmethod
     def setUpClass(cls):
@@ -104,8 +104,7 @@ class TestModesAgree(unittest.TestCase):
 
     def cases(self):
         # The symmetric puzzles (|G| > 1 at the root) plus an ordinary one,
-        # on both boards. Kept to puzzles that are quick under *every*
-        # mode -- "block" on its own is slow by design.
+        # on both boards.
         for name in ("11", "12", "17", "20", "22", "35", "65", "45"):
             yield "main_puzzles", name
         for name in ("84", "85", "88"):
@@ -115,7 +114,7 @@ class TestModesAgree(unittest.TestCase):
         for book, name in self.cases():
             puzzle = self.game.books[book][name]
             with self.subTest(book=book, puzzle=name):
-                expected = grids(puzzle, branching="cell", symmetry=False)
+                expected = grids(puzzle, symmetry=False)
                 self.assertEqual(len(expected), len(set(expected)), "duplicate solutions")
                 for mode in MODES:
                     self.assertEqual(grids(puzzle, **mode), expected, f"{mode} disagrees")
@@ -175,7 +174,7 @@ class TestUpToSymmetry(unittest.TestCase):
             with self.subTest(puzzle=name):
                 self.assertEqual(len(puzzle.setup.region_symmetries(puzzle.grid == EMPTY)), 1)
                 self.assertEqual(grids(puzzle, up_to_symmetry=True),
-                                 grids(puzzle, branching="cell", symmetry=False))
+                                 grids(puzzle, symmetry=False))
 
     def test_representatives_regenerate_every_solution(self):
         """Applying the group to the representatives must give back the
@@ -187,7 +186,7 @@ class TestUpToSymmetry(unittest.TestCase):
                 reps = [s.grid for s in Solver(puzzle).solve(up_to_symmetry=True)]
                 regenerated = {apply_image(g, im).tobytes() for g in reps for im in images}
                 self.assertEqual(sorted(regenerated),
-                                 grids(puzzle, branching="cell", symmetry=False))
+                                 grids(puzzle, symmetry=False))
 
     def test_representatives_are_pairwise_distinct_classes(self):
         for name in ("11", "17", "22"):
@@ -241,7 +240,7 @@ class TestPentominoes(unittest.TestCase):
             state = State(setup)
             with self.subTest(board=f"{depth}x{width}"):
                 self.assertEqual(len(setup.board_symmetries), 4)
-                baseline = grids(state, branching="cell", symmetry=False)
+                baseline = grids(state, symmetry=False)
                 self.assertEqual(len(baseline), total)
                 self.assertEqual(grids(state), baseline, "default mode disagrees")
                 self.assertEqual(len(grids(state, up_to_symmetry=True)), distinct)
@@ -281,10 +280,6 @@ class TestLimitsWithSymmetry(unittest.TestCase):
         sets = [grids(puzzle, seed=seed) for seed in (None, 0, 1)]
         for other in sets[1:]:
             self.assertEqual(other, sets[0])
-
-    def test_bad_branching_rejected(self):
-        with self.assertRaises(ValueError):
-            list(Solver(self.empty).solve(branching="nonsense", max_solutions=1))
 
 
 if __name__ == "__main__":

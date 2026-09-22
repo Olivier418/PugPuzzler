@@ -37,7 +37,7 @@ class _Tables:
     and the branching choice for both (see `Solver._branch_item`). Column
     `n_cols` is padding, for rows shorter than the widest block.
 
-    A placement's *global id* is its row in `placement_cells` /
+    A placement's *global id* is its row in `placement_rows` /
     `placement_items`; block position p owns ids
     `block_start[p]:block_start[p + 1]`, so a block-local placement index
     is `gid - block_start[p]`. Nothing ever reorders these rows: a seed
@@ -51,37 +51,39 @@ class _Tables:
     """
 
     def __init__(self, setup: "Setup"):
+        # Setup._validate has already rejected any block with no placements,
+        # so every run below is non-empty and kmax is well defined.
         placement_cells = setup.placement_cells
         self.n_cells = n_cells = setup.n_cells
         self.block_ids = list(placement_cells)
         sizes = [placement_cells[b].shape[0] for b in self.block_ids]
-        self.block_start = np.concatenate([[0], np.cumsum(sizes)]).astype(np.intp)
+        self.block_start = np.cumsum([0] + sizes, dtype=np.intp)
         self.block_of = np.repeat(np.arange(len(self.block_ids)), sizes)
         n_total = int(self.block_start[-1])
         self.n_cols = n_cols = n_cells + len(self.block_ids)
 
-        kmax = max(
-            (arr.shape[1] for arr in placement_cells.values() if arr.shape[0]), default=1
-        )
         # Short rows are padded with the padding column, which is parked at
         # _COVERED for the whole search: never scarce, never dead, and it
         # sorts last in _order_gids.
-        cells = np.full((n_total, kmax), n_cols, dtype=np.intp)
+        kmax = max(arr.shape[1] for arr in placement_cells.values())
+        rows = np.full((n_total, kmax), n_cols, dtype=np.intp)
         for pos, block_idx in enumerate(self.block_ids):
             arr = placement_cells[block_idx]
-            if arr.shape[0]:
-                cells[self.block_start[pos]:self.block_start[pos + 1], :arr.shape[1]] = arr
-        self.placement_cells = cells
-        self.placement_items = np.column_stack([cells, n_cells + self.block_of])
+            rows[self.block_start[pos]:self.block_start[pos + 1], :arr.shape[1]] = arr
+        self.placement_rows = rows
+        self.placement_items = np.column_stack([rows, n_cells + self.block_of])
 
-        # item -> global ids of every placement satisfying it: for a cell
-        # the placements through it, for a block simply its own run.
-        flat = cells.ravel()
+        # item -> global ids of every placement satisfying it. For a cell,
+        # the placements through it: pair every real entry of `rows` with
+        # its own gid, sort those pairs by cell, and cut the result at the
+        # per-cell counts. For a block, simply its own contiguous run.
+        flat = rows.ravel()
         real = flat < n_cells
+        cell_of = flat[real]
         gids = np.repeat(np.arange(n_total), kmax)[real]
-        by_cell = np.argsort(flat[real], kind="stable")
-        bounds = np.concatenate([[0], np.cumsum(np.bincount(flat[real], minlength=n_cells))])
-        self.item_lists = [gids[by_cell][bounds[c]:bounds[c + 1]] for c in range(n_cells)]
+        by_cell = gids[np.argsort(cell_of, kind="stable")]
+        bounds = np.cumsum(np.bincount(cell_of, minlength=n_cells))
+        self.item_lists = np.split(by_cell, bounds[:-1])
         self.item_lists += [
             np.arange(self.block_start[p], self.block_start[p + 1])
             for p in range(len(self.block_ids))
@@ -100,7 +102,7 @@ class _Tables:
         ids = self._kill_cache[gid]
         if ids is None:
             pos = self.block_of[gid]
-            row = self.placement_cells[gid]
+            row = self.placement_rows[gid]
             own = np.arange(self.block_start[pos], self.block_start[pos + 1])
             ids = np.unique(np.concatenate(
                 [self.item_lists[c] for c in row[row < self.n_cells]] + [own]
@@ -109,8 +111,18 @@ class _Tables:
         return ids
 
 
-# Setup -> its tables, so a book's 72 puzzles build them once instead of 72
-# times. Weakly keyed: nothing in here keeps a Setup (or its tables) alive.
+# Setup -> its tables, so a book's puzzles build them once instead of once
+# each. Worth 1.47x on main_puzzles and 2.09x on pyramid_puzzles over a whole
+# book -- and almost none of that is the build itself (~0.03s across 72
+# puzzles). It is `kill`'s memo: rebuilt per puzzle it starts cold every time,
+# shared it is warm after the first few.
+#
+# Deliberately a module-level cache rather than an attribute on the Setup:
+# benchmark.py pickles a Puzzle to each trial subprocess, and anything living
+# in the Setup's __dict__ rides along. A warm cache is ~7.8 MB, which would
+# take that pickle from 0.18 MB to 8.01 MB per trial.
+#
+# Weakly keyed, so nothing in here keeps a Setup (or its tables) alive.
 _TABLES: "weakref.WeakKeyDictionary[Setup, _Tables]" = weakref.WeakKeyDictionary()
 
 
@@ -126,17 +138,17 @@ class Solver:
     must be placed and every open cell covered exactly once.
 
     Both halves of that are *items* to satisfy, counted in one array (see
-    _Tables). By default the search branches on the scarcest item -- the
-    cell or block that the fewest live placements can still satisfy -- and
-    tries every placement satisfying it. Every solution satisfies that
-    item exactly once, so those branches partition the solutions: nothing
-    is missed and nothing is found twice.
+    _Tables). The search branches on the scarcest item -- the cell or
+    block that the fewest live placements can still satisfy -- and tries
+    every placement satisfying it. Every solution satisfies that item
+    exactly once, so those branches partition the solutions: nothing is
+    missed and nothing is found twice.
 
     Where the still-open region is symmetric it branches on a block
     specifically, and searches only one placement per symmetry orbit; see
-    solve()'s `branching`/`symmetry`/`up_to_symmetry`. That only happens
-    near the root -- the group dies as soon as a placement breaks it --
-    so the scarcest-item branch above is what runs essentially everywhere.
+    solve()'s `symmetry`/`up_to_symmetry`. That only happens near the root
+    -- the group dies as soon as a placement breaks it -- so the
+    scarcest-item branch above is what runs essentially everywhere.
 
     Only reads State's public surface (board, blocks, placements,
     chosen_placement_idx, grid, place(), remove(), copy()) -- no
@@ -154,8 +166,6 @@ class Solver:
         # copied.
         self.state = state.copy()
 
-        self.placement_cells = self.state.placement_cells
-
         # Blocks the state already considers placed (e.g. letters baked
         # into a Puzzle's starting grid) are fixed and excluded from the
         # search entirely.
@@ -170,22 +180,26 @@ class Solver:
         # guarantees it: block cells == board cells, and preplaced blocks
         # only ever fill whole placements.
 
-        # Shared with every other Solver on the same Setup; the hot ones
-        # are bound here so the search doesn't chase two attribute lookups
-        # per use.
-        tables = self._tables = _tables_for(self.state.setup)
+        # Shared with every other Solver on the same Setup, and unpacked
+        # here so the search doesn't chase two attribute lookups per use.
+        tables = _tables_for(self.state.setup)
         self._block_ids = tables.block_ids
         self._block_start = tables.block_start
         self._block_of = tables.block_of
         self._n_cells = tables.n_cells
         self._n_cols = tables.n_cols
-        self._placement_cells_flat = tables.placement_cells
+        self._placement_rows = tables.placement_rows
         self._placement_items = tables.placement_items
         self._item_lists = tables.item_lists
         self._kill = tables.kill
 
-        # Setup.placement_lookup, bound by solve() only when a mode can
-        # actually use symmetry -- so a solve that can't never builds it.
+        # Set per solve() call, declared here so the whole attribute
+        # surface is in one place: the tie-break priorities drawn from the
+        # seed, and Setup.placement_lookup, which is only fetched when a
+        # solve can actually use symmetry so an unsymmetric one never
+        # builds it.
+        self._priority = None
+        self._item_priority = None
         self._placement_lookup = None
 
     def _argmin_item(self, counts, lo, hi) -> int:
@@ -198,22 +212,21 @@ class Solver:
         return lo + int(keys.argmin())
 
     def _branch_item(self, counts) -> int | None:
-        """The item this node branches on, or -1 if every item is already
-        satisfied (a solution), or None if some item has no live placement
-        left (a dead end -- nothing can ever satisfy it).
+        """The scarcest item, which is what this node branches on -- or -1
+        if every item is already satisfied (a solution), or None if some
+        item has no live placement left (a dead end -- nothing can ever
+        satisfy it).
 
-        The dead-end check looks at *every* item, whatever `branching`
-        restricts the branch itself to; only when the scarcest item falls
-        outside that restriction does it cost a second argmin."""
+        One argmin over cells and blocks together answers all three: cells
+        and blocks share the count array, a satisfied item holds _COVERED
+        rather than 0, and both kinds of branch place exactly one block, so
+        their counts compare directly."""
         item = self._argmin_item(counts, 0, self._n_cols)
         count = counts[item]
         if count == 0:
             return None
         if count == _COVERED:
             return -1
-        lo, hi = self._branch_range
-        if not lo <= item < hi:
-            item = self._argmin_item(counts, lo, hi)
         return item
 
     def _root_node(self):
@@ -232,7 +245,7 @@ class Solver:
         filled = np.zeros(n_cols + 1, dtype=bool)  # padding column never blocks
         filled[:n_cells] = ~open_cells
 
-        live = unplaced[self._block_of] & ~filled[self._placement_cells_flat].any(axis=1)
+        live = unplaced[self._block_of] & ~filled[self._placement_rows].any(axis=1)
         counts = np.bincount(self._placement_items[live].ravel(), minlength=n_cols + 1)
         counts[:n_cells][~open_cells] = _COVERED
         counts[n_cells:n_cols][~unplaced] = _COVERED
@@ -289,7 +302,7 @@ class Solver:
         arbitrary one. Only pays for itself when the search is after the
         first few solutions rather than all of them; see solve()'s
         `order`."""
-        keys = counts[self._placement_cells_flat[gids]]
+        keys = counts[self._placement_rows[gids]]
         keys.sort(axis=1)  # padding is parked at _COVERED, so it sorts last
         # lexsort treats its *last* key as primary.
         return gids[np.lexsort((self._priority[gids], *keys.T[::-1]))]
@@ -301,8 +314,10 @@ class Solver:
         Every solution places that block exactly once, so these branches
         partition the solutions -- and unlike a cell's placements, the set
         of them is carried onto itself by any symmetry of the open region,
-        which is what lets `solve` collapse it into orbits (see
-        _orbits)."""
+        which is what lets `solve` collapse it into orbits (see _orbits).
+        That is its only purpose: `orbit_branch` is the sole caller, since
+        everywhere else _branch_item's scarcest item is the better branch
+        whichever kind it turns out to be."""
         item = self._argmin_item(counts, self._n_cells, self._n_cols)
         gids = self._item_lists[item]
         gids = gids[live[gids]]
@@ -321,13 +336,8 @@ class Solver:
         """The placement of the same block that `image` maps placement
         `placement_idx` onto. Guaranteed to hit -- see
         Setup.placement_lookup."""
-        cells = self.placement_cells[block_idx][placement_idx]
+        cells = self.state.placement_cells[block_idx][placement_idx]
         return self._placement_lookup[block_idx][np.sort(image[cells]).tobytes()]
-
-    def _placement_image(self, pos, gid, image):
-        """_image_placement_idx in global-id space."""
-        lo = self._block_start[pos]
-        return self._image_placement_idx(self._block_ids[pos], int(gid - lo), image) + lo
 
     def _orbits(self, pos, gids, images):
         """Group `gids` (block position `pos`'s live placements, all lying
@@ -344,6 +354,11 @@ class Solver:
         i.e. the symmetries still live once it is placed. It always
         contains the identity, so it is never empty; anything more means
         the child region is still symmetric and the reduction nests."""
+        # This block's gids are the contiguous run starting at `lo`, so a
+        # gid and its block-local placement index differ by that constant.
+        lo = int(self._block_start[pos])
+        block_idx = self._block_ids[pos]
+
         visited = set()
         for gid in gids.tolist():
             if gid in visited:
@@ -351,7 +366,7 @@ class Solver:
             orbit = {}
             stabilizer = []
             for image in images:
-                other = self._placement_image(pos, gid, image)
+                other = lo + self._image_placement_idx(block_idx, gid - lo, image)
                 if other == gid:
                     stabilizer.append(image)
                 orbit.setdefault(other, image)
@@ -384,7 +399,6 @@ class Solver:
         seed: int = None,
         time_limit: float = math.inf,
         max_solutions: float = math.inf,
-        branching: str = "item",
         symmetry: bool = True,
         up_to_symmetry: bool = False,
         order: bool = None,
@@ -405,21 +419,14 @@ class Solver:
         Nothing is ever reordered or shared, so a seed can't disturb
         anything indexed by placement.
 
-        `branching` picks what each node branches on:
-          - "item" (default): the scarcest item of either kind -- the cell
-            covered, or the block placeable, by the fewest live placements
-            -- trying every placement satisfying it. Branching on a block
-            the moment it is scarcer than every cell is what a plain cell
-            rule misses, and it costs nothing: the counts share one array.
-          - "cell": the scarcest cell only. The branch set of a cell is not
-            carried onto itself by a symmetry of the open region, so this
-            mode cannot use `symmetry` at all.
-          - "block": the scarcest block only. Markedly weaker on its own --
-            it is here as the symmetry-compatible branch and as a benchmark
-            baseline, not as a way to solve puzzles.
-          - "hybrid": "cell", but block while the open region still has a
-            live symmetry group. What "item" superseded; kept as a
-            benchmark baseline.
+        Every node branches on the scarcest item of either kind (see
+        _branch_item) -- the cell covered, or the block placeable, by the
+        fewest live placements -- and tries every placement satisfying it.
+        Branching on a block the moment it is scarcer than every cell is
+        what a plain cell rule misses, and it costs nothing: the counts
+        share one array. There is no mode to pick; the cell-only,
+        block-only and hybrid rules this replaced were measured and
+        removed (SYMMETRY_NOTES.md section 6).
 
         `symmetry` turns the orbit reduction on: at a node whose open
         region has a nontrivial symmetry group, the search branches on a
@@ -427,15 +434,14 @@ class Solver:
         its placements into orbits, searches one representative per orbit,
         and produces the other members' solutions by transforming the
         representative's. The solution *set* is unchanged; the order is
-        not (a solution is followed by its images). It is a no-op with
-        `branching="cell"`.
+        not (a solution is followed by its images). Where the open region
+        is asymmetric it costs nothing beyond the one group lookup.
 
         `up_to_symmetry` yields only the representatives -- one solution
         per symmetry class, so e.g. a puzzle whose four solutions are
         rotations of one another reports one. Strictly less work than
         `symmetry` alone, since no image is ever built. It needs the
-        group, so it block-branches at symmetric nodes even under
-        `branching="cell"`.
+        group, so it looks one up whether or not `symmetry` is set.
 
         `order` sorts each node's candidate placements, scarcest cells
         first (see _order_gids). It changes the order solutions come out
@@ -445,18 +451,7 @@ class Solver:
         whatever order siblings are tried in, so there it is pure
         overhead (~25% of the runtime).
         """
-        n_cells, n_cols = self._n_cells, self._n_cols
-        if branching in ("cell", "hybrid"):
-            self._branch_range = (0, n_cells)
-        elif branching == "block":
-            self._branch_range = (n_cells, n_cols)
-        elif branching == "item":
-            self._branch_range = (0, n_cols)
-        else:
-            raise ValueError(
-                f"branching must be 'item', 'cell', 'block' or 'hybrid', got {branching!r}."
-            )
-
+        n_cols = self._n_cols
         n_total = self._placement_items.shape[0]
         if seed is None:
             self._priority = np.arange(n_total)
@@ -473,10 +468,10 @@ class Solver:
         # uses deeper is a subgroup of this one (a representative's
         # stabilizer), so the geometry is never searched again -- which is
         # what keeps symmetry off the per-node cost entirely. None means
-        # "don't look", so a solve that can't use symmetry never builds
+        # "don't look", so a solve that turns symmetry off never builds
         # Setup's symmetry tables or placement lookup at all.
         root_images = None
-        if up_to_symmetry or (symmetry and branching != "cell"):
+        if up_to_symmetry or symmetry:
             self._placement_lookup = self.state.setup.placement_lookup
             images = self.state.setup.region_symmetries(self.state.grid == EMPTY)
             if len(images) > 1:

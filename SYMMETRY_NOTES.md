@@ -20,9 +20,9 @@ group is live.
 
 ## 2. What the solver does
 
-`Solver.solve(branching=..., symmetry=..., up_to_symmetry=..., order=...)`.
-Branching defaults to `"item"` (section 6); what matters here is only that a
-symmetric node branches on a **block**, whatever the mode.
+`Solver.solve(symmetry=..., up_to_symmetry=..., order=...)`. An ordinary node
+branches on the scarcest item (section 6); what matters here is only that a
+symmetric node branches on a **block** instead.
 
 - `Setup.region_symmetries` is called **once per solve**, on the root's open
   cells. Not per node.
@@ -54,7 +54,12 @@ symmetry class, with no dedupe pass. It is also strictly *less* work than
 
 Full enumeration, identical solution sets, best of 3. Measured against the
 solver of `7427453`, i.e. before the item branch and the flat-table rewrite of
-section 6; `"balanced"` is today's `"hybrid"`.
+section 6; `"balanced"` was renamed `"hybrid"` in that commit.
+
+`branching` was a solver argument then. The modes it selected were removed on
+2026-09-23 (see the end of section 6), so this table and the mode comparisons
+in section 6 are a record of how the decision was reached, not something the
+current solver can reproduce.
 
 | case | `branching="cell"` | then-default (hybrid+symmetry) | speedup |
 |---|---|---|---|
@@ -178,9 +183,11 @@ once" are the same constraint, so cells and blocks now share one index space
 and one `counts` array (`_Tables.placement_items` appends the block's own
 column to each placement's cells). One decrement and one argmin then do the
 dead-end check, the solved test and the branch choice at once, for both kinds.
-`branching="item"` (the new default) branches on whichever item is scarcest --
-a block the moment fewer placements are left for it than for any cell, which
-plain cell-MRV cannot see. `"hybrid"` is kept as the baseline it now is.
+`branching="item"` (then the new default, now the only rule) branches on
+whichever item is scarcest -- a block the moment fewer placements are left for
+it than for any cell, which plain cell-MRV cannot see. `"hybrid"` was kept as
+the baseline it had become, until the measurements at the end of this section
+retired it.
 
 **Forward checking.** `_place` picks the child's branching item itself and
 rejects the child if any item is left with no placement. Those children used to
@@ -277,7 +284,49 @@ sooner (time-to-first summed over both IQpuzzler books: 0.37 s with, 0.60 s
 without). So it became an option, defaulting to on exactly when `time_limit` or
 `max_solutions` is set.
 
+### Retiring the other modes (2026-09-23)
+
+The three alternatives were kept as benchmark baselines until they were
+measured head to head against `item`, which section 6 above never did -- it
+only established that the solution sets agree. Best of 3, interleaved in one
+process, full enumeration on the books and a fixed solution count on the empty
+boards. "nodes" is again the children the search descends into.
+
+| case | item | hybrid | cell | block | hybrid/item time | hybrid/item nodes |
+|---|---|---|---|---|---|---|
+| `main_puzzles` (3680 sols) | **1.99 s** | 2.42 s | 2.43 s | -- | 1.22x | 1.20x |
+| `pyramid_puzzles` (41) | **0.097 s** | 0.300 s | 0.293 s | 0.587 s | **3.08x** | 2.56x |
+| PRO `main_puzzles` (40) | **0.211 s** | 0.214 s | 0.208 s | 1.722 s | 1.01x | 1.01x |
+| PRO `pyramid_puzzles` (44) | **2.14 s** | 2.31 s | 2.34 s | -- | 1.08x | 1.07x |
+| `empty_main`, 2000 sols | **0.535 s** | 0.561 s | 4.73 s | -- | 1.05x | 1.03x |
+| `empty_pyramid`, 500 sols | **1.93 s** | 2.06 s | -- | -- | 1.07x | 1.06x |
+
+`item` wins every case on both time and nodes, so `branching` was dropped and
+the argument with it. Four things the run showed:
+
+- **`hybrid` is `cell`** on `pyramid_puzzles`, PRO `main_puzzles` and PRO
+  `pyramid_puzzles` -- the same node counts to the unit (10117, 6258, 76265).
+  Its block branch only fires while a group is live, which on those books is
+  never at a node that costs anything. It separates from `cell` only on
+  `main_puzzles` (84766 vs 85877) and `empty_main` (13252 vs 123884).
+- The **closest call** is PRO `main_puzzles`, where `cell` comes in 1.4% under
+  `item` (0.208 s vs 0.211 s). That is inside this laptop's noise, and `item`
+  still visits fewer nodes there (6178 vs 6258). A tie, not a loss.
+- **`block` alone** is 8.2x slower than `item` on PRO `main_puzzles` (1.722 s,
+  23068 nodes against 6178) and 6.0x on `pyramid_puzzles`, confirming section
+  5's "markedly weaker".
+- `empty_main`'s `cell` column (4.73 s against 0.535 s) is **symmetry's**
+  payoff rather than the branch rule's -- `cell` is the one mode that could
+  never use the orbit reduction. That is why `symmetry` stayed a knob while
+  `branching` went: it is the only remaining way to measure the reduction, and
+  the tests' only baseline that derives no solution from another.
+
 ## 7. Where the old code lives
+
+The four branching modes last coexist in `c398a8b` -- `git show
+c398a8b:classes/solver.py` is the solver every number in section 6 was measured
+on, including the table above. `cell`/`block`/`balanced` on the pre-item solver
+are in `git show 7427453:classes/solver.py`, which is what section 3 measured.
 
 The geometry restored here (`Lattice.point_group`, `Setup.region_symmetries`,
 `_symmetry_tables`) came from `git show bf25303:classes/lattice.py` and
