@@ -16,9 +16,10 @@ from solving import make_result, single_run_books
 
 
 # A config is the dict of keyword options handed to the solver (besides the
-# seed): `branching` and `symmetry` (see Solver.solve). An empty config means
-# the solver's own defaults, i.e. branching="hybrid" + symmetry -- so
-# {"branching": "cell"} is the plain cell-MRV baseline, not {}.
+# seed): `branching`, `symmetry` and `order` (see Solver.solve). An empty
+# config means the solver's own defaults, i.e. branching="item" + symmetry --
+# so {"branching": "cell"} is the plain cell-MRV baseline, not {}. Note that
+# a benchmark trial always sets a time limit, so `order` defaults to on.
 #
 # Only options that leave the solution set alone belong here; anything that
 # changes *which* solutions come back (up_to_symmetry, like the two limits)
@@ -28,6 +29,8 @@ DEFAULT_CONFIGS = [{"branching":"cell",},
                    {"branching":"block","symmetry":True},
                    {"branching":"block","symmetry":False},
                    {"branching":"hybrid","symmetry":True},
+                   {},
+                   {"order":False},
                    ]
 
 ConfigKey = tuple[tuple[str, object], ...]

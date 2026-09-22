@@ -17,12 +17,13 @@ from constants import EMPTY
 from tests._helpers import assert_valid_solution, load
 
 
-# Every (branching, symmetry) pair. None of them may change the solution set.
+# Every (branching, symmetry) pair, plus candidate ordering forced on and
+# off. None of them may change the solution set.
 MODES = [
     {"branching": branching, "symmetry": symmetry}
-    for branching in ("cell", "block", "hybrid")
+    for branching in ("item", "cell", "block", "hybrid")
     for symmetry in (False, True)
-]
+] + [{"order": True}, {"order": False}]
 
 PENTOMINOES = {
     "F": [".XX", "XX.", ".X."], "I": ["XXXXX"],        "L": ["X.", "X.", "X.", "XX"],

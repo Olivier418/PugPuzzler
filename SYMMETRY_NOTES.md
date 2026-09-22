@@ -20,7 +20,9 @@ group is live.
 
 ## 2. What the solver does
 
-`Solver.solve(branching=..., symmetry=..., up_to_symmetry=...)`.
+`Solver.solve(branching=..., symmetry=..., up_to_symmetry=..., order=...)`.
+Branching defaults to `"item"` (section 6); what matters here is only that a
+symmetric node branches on a **block**, whatever the mode.
 
 - `Setup.region_symmetries` is called **once per solve**, on the root's open
   cells. Not per node.
@@ -50,9 +52,11 @@ symmetry class, with no dedupe pass. It is also strictly *less* work than
 
 ## 3. Measured
 
-Full enumeration, identical solution sets, best of 3.
+Full enumeration, identical solution sets, best of 3. Measured against the
+solver of `7427453`, i.e. before the item branch and the flat-table rewrite of
+section 6; `"balanced"` is today's `"hybrid"`.
 
-| case | `branching="cell"` | default (balanced+symmetry) | speedup |
+| case | `branching="cell"` | then-default (hybrid+symmetry) | speedup |
 |---|---|---|---|
 | 12 pentominoes, 3x20 (8 solutions) | 3.13 s | 0.99 s | **3.15x** |
 | 12 pentominoes, 4x15 (1472 solutions) | 66.2 s | 9.8 s | **6.73x** |
@@ -163,7 +167,117 @@ PRO `empty_alt` produces those at its symmetric (block-branched) nodes. On
 ten such nodes, but together they are an estimated 0.4% of that tree. On
 IQpuzzler `empty_main` the symmetric nodes never split.
 
-## 6. Where the old code lives
+## 6. The item branch and the flat-table rewrite (2026-09-22)
+
+Not symmetry, but it changes every number above. Solution sets are identical to
+`7427453`'s: both IQpuzzler books, all three IQpuzzlerPRO books and IQquub,
+under `cell`/`hybrid`/`item` x `symmetry`, seeded, and `up_to_symmetry`.
+
+**Items.** "Every cell covered exactly once" and "every block placed exactly
+once" are the same constraint, so cells and blocks now share one index space
+and one `counts` array (`_Tables.placement_items` appends the block's own
+column to each placement's cells). One decrement and one argmin then do the
+dead-end check, the solved test and the branch choice at once, for both kinds.
+`branching="item"` (the new default) branches on whichever item is scarcest --
+a block the moment fewer placements are left for it than for any cell, which
+plain cell-MRV cannot see. `"hybrid"` is kept as the baseline it now is.
+
+**Forward checking.** `_place` picks the child's branching item itself and
+rejects the child if any item is left with no placement. Those children used to
+be entered and only then found dead: 72k of `main_puzzles`' 190k search calls,
+each having first paid for a recursion, a grid write and a full node's
+bookkeeping. Covered items hold `_COVERED` rather than 0, which is what lets
+one argmin distinguish "scarcest", "dead" and "solved" -- and it retired
+`open_cells` and `_dead_end` entirely.
+
+**Cheaper nodes.** `_Tables` depends on the Setup alone, so a book builds it
+once instead of once per puzzle (`_tables_for`, weakly keyed). `kill(gid)`
+merges the overlap set with the placement's own block, so `_place` is two fancy
+indexes, two array ops and a `bincount`; `live` is copied only once the child
+survives. The search carries a `path` of global ids and materialises a State
+only at a solution, so no grid is touched per node.
+
+Best of 3, interleaved old/new in one process (this laptop's timings drift up
+to 3x otherwise). "nodes" counts the children the search descends into.
+
+| case | old cell | old default | new cell | new default | speedup | nodes |
+|---|---|---|---|---|---|---|
+| `main_puzzles` (3680 solutions) | 10.62 s | 10.56 s | 2.31 s | **1.88 s** | **5.6x** | 157k -> 71k |
+| `pyramid_puzzles` (41) | 1.33 s | 1.33 s | 0.30 s | **0.10 s** | **14.0x** | 20k -> 4k |
+| PRO `pyramid_puzzles` | 10.19 s | 10.28 s | 2.31 s | **2.14 s** | **4.8x** | 171k -> 71k |
+| 12 pentominoes, 3x20 (8) | 2.80 s | 0.87 s | 0.61 s | **0.21 s** | **4.1x** | 17k -> 5k |
+
+On `main_puzzles` the two effects split roughly 80/20: forward checking removes
+the 72k dead children, and the item branch takes the nodes that actually branch
+from 81k to 67k (17%). Symmetry still pays on top of both (new cell vs new
+default: 1.2x on `main_puzzles`, 3.0x on `pyramid_puzzles`).
+
+### Empty boards, and where symmetry actually pays
+
+Seconds to a fixed number of solutions (best of 3), which is the honest
+stand-in for a rate: a time limit would measure whatever region the search
+happened to be in.
+
+| case | old default | new default | new, `symmetry=False` | new `cell` |
+|---|---|---|---|---|
+| `empty_main`, 2000 solutions | 1.79 s | **0.57 s** | 1.79 s | 4.85 s |
+| `empty_pyramid`, 500 solutions | 6.83 s | **2.32 s** (1.73 s with `order=False`) | 13.50 s | 36.86 s |
+
+So the empty boards gain less from the rewrite (2.9-3.1x) than the books
+(4.8-14x) -- the books are full of tight preplaced puzzles, which is where
+forward checking and a scarce *block* pay most -- but they are the one place
+the symmetry framework itself is worth anything: **3.1x** on main and **5.8x**
+on the pyramid (`|G|` = 4 and 8), against **1.00-1.02x** on the books, exactly
+as section 3 predicted. It costs nothing where it can't be used.
+
+Sections 4 and 5 (symmetric pockets, partitioning) got *less* attractive, not
+more: a node now costs ~27 us on `main_puzzles` where it cost ~77 us, while the
+per-node geometry sweep (34-52 us) and the partition check (11-28 us) are
+unchanged. Both were already below break-even.
+
+### Cell vs block: what "most constrained" means
+
+Branch on `min(cell counts, w * block counts)`; `w = 1` is what ships,
+`w = inf` is cells-only. The *relative* variant instead keys on each item's
+count divided by its count at the root. Nodes are children the search descends
+into; every row carries the same float-key overhead, so the times compare with
+each other but not with the shipped solver.
+
+| case | | 0.25 | 0.5 | 0.75 | **1** | 1.5 | 2 | cells only | relative |
+|---|---|---|---|---|---|---|---|---|---|
+| `main_puzzles` | nodes | 1.14 | 0.99 | **0.98** | 1.00 | 1.10 | 1.18 | 1.20 | 1.30 |
+| | time | 5.22 | 3.48 | 3.01 | **2.94** | 3.24 | 3.71 | 3.54 | 5.56 |
+| `pyramid_puzzles` | nodes | 1.54 | 0.93 | **0.90** | 1.00 | 1.35 | 1.90 | 2.56 | 1.89 |
+| | time | 0.29 | 0.14 | **0.13** | 0.15 | 0.21 | 0.30 | 0.44 | 0.40 |
+| PRO `main_puzzles` | nodes | 1.92 | **0.94** | 0.97 | 1.00 | 1.01 | 1.01 | 1.01 | 5.53 |
+| | time | 0.87 | 0.31 | **0.30** | **0.30** | 0.31 | 0.31 | 0.33 | 2.50 |
+| `empty_main` (2000 sols) | nodes | **0.70** | 0.80 | 0.87 | 1.00 | 1.03 | 1.03 | 1.03 | 1.08 |
+| | time | 0.73 | **0.69** | 0.70 | 0.75 | 0.93 | 0.86 | 0.78 | 1.04 |
+
+**Absolute counts, compared at 1:1.** The two branch sets are directly
+comparable because every child of either kind places exactly one block, so an
+equal count means an equal branching factor *and* equal progress; there is no
+unit mismatch a threshold would have to correct. Relative is worse everywhere
+(1.3x on `main_puzzles`, 5.5x on PRO `main_puzzles`): MRV's whole justification
+is that the candidate count **is** the node's branching factor, and a ratio
+doesn't bound it -- it will happily pick an item with 20 children over one with
+3 because 20 is a smaller fraction of where it started.
+
+A mild block preference (`w` = 0.5-0.75) is a few percent better on three of
+the four cases and a few percent worse on `main_puzzles`; not worth a knob.
+Note also that node counts flatter block-heavy settings: a block branch tries
+many more placements that `_place` rejects, and a rejection costs without
+counting as a node -- which is why `w = 0.25` wins on nodes for `empty_main`
+and still loses on time.
+
+**`order`.** Sorting each node's candidates (`_order_gids`) is ~25% of the
+runtime and cannot change a full enumeration's node set at all -- sibling order
+doesn't decide which nodes exist. It does find the first solutions markedly
+sooner (time-to-first summed over both IQpuzzler books: 0.37 s with, 0.60 s
+without). So it became an option, defaulting to on exactly when `time_limit` or
+`max_solutions` is set.
+
+## 7. Where the old code lives
 
 The geometry restored here (`Lattice.point_group`, `Setup.region_symmetries`,
 `_symmetry_tables`) came from `git show bf25303:classes/lattice.py` and
