@@ -1,0 +1,12 @@
+# Core. numba compiles classes/kernel.py, which is the solver's search loop;
+# without it nothing solves. NUMBA_DISABLE_JIT=1 runs that same source as plain
+# Python for debugging, but still needs numba installed for the decorators.
+numpy>=1.22,<2.6
+numba>=0.67
+
+# Terminal rendering and progress.
+colorama
+tqdm
+
+# plotting/ only.
+matplotlib

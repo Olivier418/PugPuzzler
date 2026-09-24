@@ -1,7 +1,7 @@
 """Solving puzzles and packaging the outcome: run the solver over a Puzzle /
 PuzzleBook, time it, wrap the results in Solution/SolveStats containers and
-(by default) save them to a folder mirroring where the puzzle was loaded
-from. Sits above both `classes` (the data model) and `serialization` (disk
+(opt-in, `save=True`) save them to a folder mirroring where the puzzle was
+loaded from. Sits above both `classes` (the data model) and `serialization` (disk
 I/O), so neither has to import the other."""
 import math
 import time
@@ -81,31 +81,32 @@ def solve_puzzle(
     puzzle: Puzzle,
     seed: int = None,
     verbose: int = Verbosity.SILENT,
-    save: bool = True,
+    save: bool = False,
     path: str | Path = None,
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
-    up_to_symmetry: bool = False,
     **options,
 ) -> tuple[Solution, SolveStats]:
-    """Solve a single Puzzle and, by default, save the results and
+    """Solve a single Puzzle and, with `save=True`, save the results and
     the run's SolveStats to a folder mirroring where the Puzzle
     itself was loaded from, under `solutions_root` (e.g.
     games/IQpuzzler/puzzles/main_empty ->
     solutions/IQpuzzler/puzzles/main_empty/result_<idx>/{solutions,stats}.json).
 
-    Pass `save=False` to just solve, or `path=` to save somewhere
-    specific instead of the mirrored default. `verbose` (see Verbosity)
+    Saving is off by default; pass `save=True` to save, and `path=` to
+    save somewhere specific instead of the mirrored default (`path` alone
+    does not save). `verbose` (see Verbosity)
     controls progress printing. `time_limit` (seconds) and
     `max_solutions` stop the solve early, whichever is hit first (both
     default to infinity; not recorded in the SolveStats -- its
-    `duration` and `elapsed` show a truncated run). `up_to_symmetry`
-    keeps one solution per symmetry class; like the two limits it changes
-    which solutions come back rather than how they are found, so it is
-    named here and kept out of `options`. `options` are forwarded to the
+    `duration` and `elapsed` show a truncated run). They are named here
+    rather than left in `options` because they change which solutions
+    come back, not how they are found. `options` are forwarded to the
     solver and recorded in the SolveStats.
     """
+    # Kept out of the clock: a one-off per-process cost, not search time.
+    puzzle.setup.warmup()
     start = time.perf_counter()
     grids = []
     elapsed = []
@@ -113,7 +114,6 @@ def solve_puzzle(
         seed=seed,
         time_limit=time_limit,
         max_solutions=max_solutions,
-        up_to_symmetry=up_to_symmetry,
         **options,
     ):
         grids.append(state.setup.to_full_grid(state.grid))
@@ -145,21 +145,19 @@ def solve_puzzlebook(
     game_name: str = None,
     seed: int = None,
     verbose: int = Verbosity.SILENT,
-    save: bool = True,
+    save: bool = False,
     path: str | Path = None,
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
-    up_to_symmetry: bool = False,
     **options,
 ) -> tuple[SolutionBook, SolveStatsBook]:
-    """Solve every puzzle in a PuzzleBook and, by default, save the
+    """Solve every puzzle in a PuzzleBook and, with `save=True`, save the
     combined solutions and solve stats to a folder mirroring where
     the book itself was loaded from (see solve_puzzle for the
     mirroring rule). `verbose` applies to each puzzle in turn.
 
-    `time_limit`, `max_solutions` and `up_to_symmetry` apply to each
-    puzzle separately.
+    `time_limit` and `max_solutions` apply to each puzzle separately.
 
     Delegates per-puzzle solving to solve_puzzle so the two entry points
     can't drift apart; only the batching and the single combined save are
@@ -179,7 +177,6 @@ def solve_puzzlebook(
             save=False,
             time_limit=time_limit,
             max_solutions=max_solutions,
-            up_to_symmetry=up_to_symmetry,
             **options,
         )
         # Individual puzzles carry their own Source, but this

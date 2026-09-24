@@ -8,7 +8,7 @@ from serialization import solution_puzzle_info
 from classes import SolveStatsBook
 
 
-def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=None, ax: plt.Axes = None) -> plt.Axes:
+def plot_solve_timeline(puzzles, solutions: SolutionBook, stats: SolveStatsBook, ax: plt.Axes = None) -> plt.Axes:
     """Timeline plot: one column per puzzle, y = time (log scale). A thin
     gray horizontal line marks every solution found; the first solution
     for each puzzle is drawn thicker, in the puzzle's difficulty color.
@@ -24,12 +24,12 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
     produced alongside `solutions` by the same solve call -- it's
     solver-run metadata, not part of the solutions themselves.
     difficulty is the source Puzzle's, not the Solution's own -- see
-    serialization.solution_puzzle_info. Pass `puzzles` (e.g. the PuzzleBook `solutions`
-    was solved from) when one is in memory; otherwise each is resolved
-    from its puzzle's JSON on disk.
+    serialization.solution_puzzle_info. `puzzles` is the PuzzleBook `solutions`
+    was solved from when one is in memory; pass None to resolve each from
+    its puzzle's JSON on disk instead.
     """
     solved_puzzles = list(solutions.values())
-    difficulty_by_name = {sol.puzzle_name: solution_puzzle_info(sol, puzzles).difficulty for sol in solved_puzzles}
+    difficulty_by_name = {sol.puzzle_name: solution_puzzle_info(puzzles, sol).difficulty for sol in solved_puzzles}
 
     # order columns: group by difficulty (in DIFFICULTY_COLORS order);
     # within a group, preserve the original order the puzzles appear in
@@ -89,7 +89,7 @@ def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, puzzles=
 
     ax.set_xlim(x_positions[0] - 1, x_positions[-1] + 1)
 
-    # minimalist styling, consistent with plot_difficulty_space
+    # minimalist styling, consistent with plot_puzzlebook
     ax.set_yscale("log")
     ax.set_ylabel("Time to solution (s)")
     ax.spines["top"].set_visible(False)

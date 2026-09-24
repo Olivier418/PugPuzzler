@@ -43,19 +43,15 @@ def _poisson_rate(runs: list[tuple[np.ndarray, float]]) -> float:
 def plot_benchmark(
     stats_books: dict[ConfigKey, list[SolveStatsBook]],
     show_trendline: bool = True,
-    T: float | None = None,
 ):
-    """`T` is the wall-clock cap the benchmark was run with; pass it to
-    pin the x-axis (and the trendlines) to the full window that was
-    actually budgeted. Left out, the axis falls back to the longest trial
-    observed, which only differs from T when every trial finished early."""
     # t_max (the plot's time ceiling) has to come from how long each trial
     # actually ran, not from the timestamp of the last solution found --
     # a trial that times out at T can easily go quiet for a while before
     # the kill, so its last *solution* lands well before T even though
-    # the search itself ran the full T seconds.
+    # the search itself ran the full T seconds. The longest duration is
+    # the benchmark's T whenever any trial timed out.
     all_durations = [_only_stats(book).duration for runs in stats_books.values() for book in runs]
-    t_max = T if T is not None else (max(all_durations) if all_durations else 1.0)
+    t_max = max(all_durations) if all_durations else 1.0
 
     time_grid = np.linspace(0, t_max, 500)
     final_max_y = 1

@@ -29,7 +29,7 @@ def next_run_dir(source: Source | None, root: str | Path) -> Path:
         raise ValueError(
             "Can't auto-save: no `source` on this Puzzle/PuzzleBook (it "
             "wasn't loaded via serialization.load_game). Pass `path=` "
-            "explicitly, or `save=False` to skip saving."
+            "explicitly, or drop `save=True`."
         )
     return next_free_idx_dir(Path(root) / source.relative_dir())
 

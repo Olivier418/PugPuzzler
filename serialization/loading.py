@@ -244,10 +244,10 @@ def solution_states(solution: Solution, games_root: str | Path = GAMES_DIR) -> l
     return solution.to_states(setup)
 
 
-def solution_puzzle_info(solution: Solution, puzzles=None, games_root: str | Path = GAMES_DIR) -> PuzzleInfo:
+def solution_puzzle_info(puzzles, solution: Solution, games_root: str | Path = GAMES_DIR) -> PuzzleInfo:
     """The source Puzzle's difficulty/empty-cell count for a Solution:
     from the live puzzle or `puzzles` (a PuzzleBook, or any
-    puzzle_name -> Puzzle mapping) when there is one, else read straight
+    puzzle_name -> Puzzle mapping; None if there isn't one) when there is one, else read straight
     from the game's JSON via the Solution's game/book/puzzle IDs -- which,
     unlike solution_states, never needs the placement computation."""
     if solution.puzzle is not None or (puzzles is not None and solution.puzzle_name in puzzles):
