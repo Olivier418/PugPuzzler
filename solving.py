@@ -1,7 +1,7 @@
 """Solving puzzles and packaging the outcome: run the solver over a Puzzle /
 PuzzleBook, time it, wrap the results in Solution/SolveStats containers and
-(opt-in, `save=True`) save them to a folder mirroring where the puzzle was
-loaded from. Sits above both `classes` (the data model) and `serialization` (disk
+(opt-in, `save_solutions`/`save_stats`) save them to a folder mirroring where
+the puzzle was loaded from. Sits above both `classes` (the data model) and `serialization` (disk
 I/O), so neither has to import the other."""
 import math
 import time
@@ -12,7 +12,7 @@ import numpy as np
 
 from classes import Puzzle, PuzzleBook, Solution, SolutionBook, SolveStats, SolveStatsBook
 from constants import SOLUTION_DIR
-from serialization import save_solution_run
+from serialization import save_run
 from serialization.paths import next_run_dir
 
 
@@ -57,7 +57,7 @@ def make_result(
 
 def single_run_books(solution: Solution, stats: SolveStats) -> tuple[SolutionBook, SolveStatsBook]:
     """Wrap one puzzle's (Solution, SolveStats) in book containers, which is
-    what buys save_solution_run/load_solution_run compatibility."""
+    what buys save_run/load_run compatibility."""
     source = solution.puzzle.source
     book_name = source.book_name if source else None
     return (
@@ -70,22 +70,24 @@ def solve_puzzle(
     puzzle: Puzzle,
     seed: int = None,
     verbose: int = Verbosity.SILENT,
-    save: bool = False,
+    save_solutions: bool = False,
+    save_stats: bool = False,
     path: str | Path = None,
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
     **options,
 ) -> tuple[Solution, SolveStats]:
-    """Solve a single Puzzle and, with `save=True`, save the results and
-    the run's SolveStats to a folder mirroring where the Puzzle
-    itself was loaded from, under `solutions_root` (e.g.
+    """Solve a single Puzzle and save the solved grids (`save_solutions`)
+    and/or the run's SolveStats (`save_stats`) to a folder mirroring where
+    the Puzzle itself was loaded from, under `solutions_root` (e.g.
     games/IQpuzzler/puzzles/main_empty ->
     solutions/IQpuzzler/puzzles/main_empty/result_<idx>/{solutions,stats}.json).
 
-    Saving is off by default; pass `save=True` to save, and `path=` to
-    save somewhere specific instead of the mirrored default (`path` alone
-    does not save). `verbose` (see Verbosity)
+    Saving is off by default; the two flags are independent, since the
+    grids are the bulk of a save and the stats are useful without them.
+    Pass `path=` to save somewhere specific instead of the mirrored default
+    (`path` alone does not save). `verbose` (see Verbosity)
     controls progress printing. `time_limit` (seconds) and
     `max_solutions` stop the solve early, whichever is hit first (both
     default to infinity; not recorded in the SolveStats -- its
@@ -122,9 +124,12 @@ def solve_puzzle(
 
     solution, stats = make_result(puzzle, grids, elapsed, duration, seed, options)
 
-    if save:
+    if save_solutions or save_stats:
         target = Path(path) if path is not None else next_run_dir(puzzle.source, solutions_root)
-        save_solution_run(*single_run_books(solution, stats), target)
+        solution_book, stats_book = single_run_books(solution, stats)
+        save_run(
+            solution_book if save_solutions else None, stats_book if save_stats else None, target,
+        )
 
     return solution, stats
 
@@ -133,17 +138,18 @@ def solve_puzzlebook(
     puzzlebook: PuzzleBook,
     seed: int = None,
     verbose: int = Verbosity.SILENT,
-    save: bool = False,
+    save_solutions: bool = False,
+    save_stats: bool = False,
     path: str | Path = None,
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
     **options,
 ) -> tuple[SolutionBook, SolveStatsBook]:
-    """Solve every puzzle in a PuzzleBook and, with `save=True`, save the
-    combined solutions and solve stats to a folder mirroring where
-    the book itself was loaded from (see solve_puzzle for the
-    mirroring rule). `verbose` applies to each puzzle in turn.
+    """Solve every puzzle in a PuzzleBook and save the combined solutions
+    (`save_solutions`) and/or solve stats (`save_stats`) to a folder
+    mirroring where the book itself was loaded from (see solve_puzzle for
+    the mirroring rule). `verbose` applies to each puzzle in turn.
 
     `time_limit` and `max_solutions` apply to each puzzle separately.
 
@@ -159,7 +165,6 @@ def solve_puzzlebook(
             puzzle,
             seed=seed,
             verbose=verbose,
-            save=False,
             time_limit=time_limit,
             max_solutions=max_solutions,
             **options,
@@ -170,8 +175,10 @@ def solve_puzzlebook(
     solution_book = SolutionBook(*solutions, book_name=puzzlebook.name)
     stats_book = SolveStatsBook(*stats_list, book_name=puzzlebook.name, options=options, seed=seed)
 
-    if save:
+    if save_solutions or save_stats:
         target = Path(path) if path is not None else next_run_dir(puzzlebook.source, solutions_root)
-        save_solution_run(solution_book, stats_book, target, flat=False)
+        save_run(
+            solution_book if save_solutions else None, stats_book if save_stats else None, target, flat=False,
+        )
 
     return solution_book, stats_book

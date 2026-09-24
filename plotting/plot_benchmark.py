@@ -2,14 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from benchmark import ConfigKey, config_label
-from classes import SolveStats, SolveStatsBook
+from classes import SolveStats
 from constants import CONFIG_PALETTE
-
-
-def _only_stats(stats_book: SolveStatsBook) -> SolveStats:
-    """Each book from run_benchmark/load_benchmark holds exactly one
-    puzzle (this trial), so unwrap it without caring what it's named."""
-    return next(iter(stats_book.values()))
 
 
 def _poisson_rate(runs: list[tuple[np.ndarray, float]]) -> float:
@@ -41,7 +35,7 @@ def _poisson_rate(runs: list[tuple[np.ndarray, float]]) -> float:
 
 
 def plot_benchmark(
-    stats_books: dict[ConfigKey, list[SolveStatsBook]],
+    trials: dict[ConfigKey, list[SolveStats]],
     show_trendline: bool = True,
 ):
     # t_max (the plot's time ceiling) has to come from how long each trial
@@ -50,7 +44,7 @@ def plot_benchmark(
     # the kill, so its last *solution* lands well before T even though
     # the search itself ran the full T seconds. The longest duration is
     # the benchmark's T whenever any trial timed out.
-    all_durations = [_only_stats(book).duration for runs in stats_books.values() for book in runs]
+    all_durations = [stats.duration for runs in trials.values() for stats in runs]
     t_max = max(all_durations) if all_durations else 1.0
 
     time_grid = np.linspace(0, t_max, 500)
@@ -58,15 +52,14 @@ def plot_benchmark(
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    for i, (config_key, runs) in enumerate(stats_books.items()):
+    for i, (config_key, runs) in enumerate(trials.items()):
         c = CONFIG_PALETTE[i % len(CONFIG_PALETTE)]
         config_name = config_label(dict(config_key))
 
         grid_counts = []
         fit_runs: list[tuple[np.ndarray, float]] = []
 
-        for book in runs:
-            stats = _only_stats(book)
+        for stats in runs:
             duration = min(stats.duration, t_max)
             times = np.asarray(stats.elapsed, dtype=float)
             times = times[times <= t_max]

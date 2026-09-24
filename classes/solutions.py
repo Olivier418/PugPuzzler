@@ -19,7 +19,7 @@ class SolveStats(NamedTuple):
     options: dict
     seed: int | None
     duration: float
-    elapsed: list[float]  # per-solution elapsed time, same order/index as the matching Solution.grids
+    elapsed: list[float]  # per-solution elapsed time, same order/index as the matching Solution.grids (if kept)
 
 
 def _book_name(book_name: str | None, puzzle_names) -> str | None:
@@ -38,7 +38,7 @@ class Solution:
     solves it (full board-shaped, see Setup.to_full_grid).
 
     The Puzzle is always live -- the one solving.py solved, or the one
-    serialization.load_solution_run found in games/ -- so everything
+    serialization.load_run found in games/ -- so everything
     about it (name, difficulty, empty spaces, Setup) is read off it rather
     than copied here, where it could drift.
 

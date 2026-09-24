@@ -147,5 +147,5 @@ class TestLimits(unittest.TestCase):
 
     def test_propagates_through_puzzle_and_solution(self):
         self.assertEqual(len(list(self.empty.solve(seed=0, max_solutions=2))), 2)
-        solution, _ = solve_puzzle(self.empty, seed=0, save=False, max_solutions=2)
+        solution, _ = solve_puzzle(self.empty, seed=0, max_solutions=2)
         self.assertEqual(len(solution.grids), 2)

@@ -1,19 +1,19 @@
 """Benchmarking the solver: run a puzzle under several solver configs and
-seeds, each trial in a subprocess with a wall-clock cap, save the runs, and
-load them back. Plotting the results lives in plotting/plot_benchmark.py."""
+seeds, each trial in a subprocess with a wall-clock cap, save each trial's
+SolveStats (never its solutions: a benchmark is about when solutions are
+found, not what they are), and load them back. Plotting the results lives
+in plotting/plot_benchmark.py."""
 import time
 import multiprocessing
 from collections.abc import Sequence
 from pathlib import Path
 
-import numpy as np
 from tqdm import tqdm
 
-from classes import Game, Puzzle, SolutionBook, SolveStatsBook
+from classes import Puzzle, SolveStats, SolveStatsBook
 from constants import BENCHMARK_DIR
-from serialization import save_solution_run, load_solution_run
-from serialization.paths import next_run_dir
-from solving import make_result, single_run_books
+from serialization.paths import next_run_dir, puzzle_name_from_run_dir
+from serialization.stats_io import load_solve_stats_book, write_solve_stats
 
 
 # A config is the dict of keyword options handed to the solver (besides the
@@ -69,17 +69,17 @@ def _worker(puzzle: Puzzle, config: dict, seed: int, T: float, conn):
     normally stops by itself with a clean "done" a hair after the parent's
     deadline; the kill is only the backstop.
 
-    Sends back only the raw grid per solution -- the parent pairs each
-    with its own arrival-time stamp to build the SolveStats.
+    Sends back only an empty tick per solution -- the parent pairs each
+    with its own arrival-time stamp to build the SolveStats. Pickling the
+    grids across the pipe would be billed as search time, for data a
+    benchmark never keeps.
     """
     try:
         # Numba's cache load is startup cost too; get it behind "ready".
         puzzle.setup.warmup()
         conn.send(("ready", None))
-        for sol in puzzle.solve(seed=seed, time_limit=T, **config):
-            # sol.grid is compact; Solution.grids (and the JSON they get
-            # saved as) are full board-shaped, same as solving.solve_puzzle.
-            conn.send(("solution", puzzle.setup.to_full_grid(sol.grid)))
+        for _ in puzzle.solve(seed=seed, time_limit=T, **config):
+            conn.send(("solution", None))
         conn.send(("done", None))
     except Exception as e:
         conn.send(("error", str(e)))
@@ -87,15 +87,11 @@ def _worker(puzzle: Puzzle, config: dict, seed: int, T: float, conn):
         conn.close()
 
 
-def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> tuple[SolutionBook, SolveStatsBook]:
-    """One (config, seed) trial, capped at T seconds. Returns a
-    (SolutionBook, SolveStatsBook) pair, each containing exactly one
-    entry for this trial (see solving.single_run_books).
-    """
+def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> SolveStats:
+    """One (config, seed) trial, capped at T seconds."""
     parent_conn, child_conn = multiprocessing.Pipe()
     process = multiprocessing.Process(target=_worker, args=(puzzle, config, seed, T, child_conn))
 
-    grids: list[np.ndarray] = []
     elapsed: list[float] = []
 
     process.start()
@@ -146,7 +142,6 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> tuple
                 break
 
             if status == "solution":
-                grids.append(payload)
                 elapsed.append(time.perf_counter() - start_wait)
             elif status == "done":
                 break
@@ -161,9 +156,9 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> tuple
         process.join()
     parent_conn.close()
 
-    solution, stats = make_result(puzzle, grids, elapsed, duration, seed, config)
-    solution_book, stats_book = single_run_books(solution, stats)
-    return solution_book, stats_book
+    return SolveStats(
+        puzzle_name=puzzle.name, options=dict(config), seed=seed, duration=duration, elapsed=elapsed,
+    )
 
 
 def run_benchmark(
@@ -172,59 +167,53 @@ def run_benchmark(
     nr_tests: int = 10,
     T: float = 5.0,
     base_folder: str | Path = BENCHMARK_DIR,
-) -> tuple[dict[ConfigKey, list[SolveStatsBook]], Path]:
+) -> tuple[dict[ConfigKey, list[SolveStats]], Path]:
     """Run nr_tests trials (seeds 0..nr_tests-1) of each config on puzzle,
-    each capped at T seconds. Every trial is saved as its own
-    solutions.json + stats.json pair under
-    base_folder/<game>/<books|puzzles>/<puzzle-or-book_puzzle>/benchmark_<idx>/
+    each capped at T seconds. Every trial's SolveStats is saved as
+    base_folder/<game>/<books|puzzles>/<puzzle-or-book_puzzle>/benchmark_<idx>/<config-label>/stats<seed>.json
     -- mirroring where the puzzle itself lives under games/, same as
     solutions/ does -- with one benchmark_<idx> folder per call, so
     re-running the same puzzle never overwrites an earlier run and you
     can tell separate simulations apart at a glance.
 
-    Returns the SolveStats side of the results in memory, grouped by config
-    (see config_key), so it can go straight into plot_benchmark without a
-    reload -- plus the run
-    folder itself, so it can be handed straight to load_benchmark later.
+    Returns the trials in memory, grouped by config (see config_key), so
+    they can go straight into plot_benchmark without a reload -- plus the
+    run folder itself, so it can be handed straight to load_benchmark later.
     """
     # Compile once here, so the trial subprocesses only load the cache.
     puzzle.setup.warmup()
 
     puzzle_folder = next_run_dir(puzzle.source, base_folder, prefix="benchmark")
 
-    stats_books: dict[ConfigKey, list[SolveStatsBook]] = {
-        config_key(config): [] for config in configs
-    }
+    trials: dict[ConfigKey, list[SolveStats]] = {config_key(config): [] for config in configs}
     total_tasks = len(configs) * nr_tests
 
     with tqdm(total=total_tasks, desc="Benchmarking", unit="run") as pbar:
         for config in configs:
             config_folder = puzzle_folder / config_label(config)
+            config_folder.mkdir(parents=True, exist_ok=True)
 
             for seed in range(nr_tests):
-                solution_book, stats_book = _run_single_test(puzzle, config, seed, T)
-                # flat=False: config/seed folders sit below the puzzle's own
-                # folder, so keep puzzle_name explicit in the files.
-                save_solution_run(solution_book, stats_book, config_folder / f"test{seed}", flat=False)
-                stats_books[config_key(config)].append(stats_book)
+                stats = _run_single_test(puzzle, config, seed, T)
+                # Flat: the puzzle's name is recovered from the path on load.
+                stats_book = SolveStatsBook(stats, options=stats.options, seed=seed)
+                write_solve_stats(stats_book, config_folder / f"stats{seed}.json")
+                trials[config_key(config)].append(stats)
                 pbar.update(1)
 
-    return stats_books, puzzle_folder
+    return trials, puzzle_folder
 
 
-def load_benchmark(folder: str | Path, game: Game = None) -> dict[ConfigKey, list[SolveStatsBook]]:
+def load_benchmark(folder: str | Path) -> dict[ConfigKey, list[SolveStats]]:
     """Reload a benchmark previously written by run_benchmark, without
     re-solving anything. `folder` is the run's own folder -- the one
     directly containing each config's subfolder -- i.e. exactly the path
-    run_benchmark returned. `game`, if given, supplies the puzzle (see
-    serialization.load_solution_run)."""
-    puzzle_folder = Path(folder)
-
-    stats_books: dict[ConfigKey, list[SolveStatsBook]] = {}
-    for config_folder in sorted(p for p in puzzle_folder.iterdir() if p.is_dir()):
-        test_folders = sorted(config_folder.glob("test*"), key=lambda p: int(p.stem.removeprefix("test")))
-        for test_folder in test_folders:
-            _, stats_book = load_solution_run(test_folder, game)
-            stats_books.setdefault(config_key(stats_book.options), []).append(stats_book)
-
-    return stats_books
+    run_benchmark returned."""
+    trials: dict[ConfigKey, list[SolveStats]] = {}
+    for config_folder in sorted(p for p in Path(folder).iterdir() if p.is_dir()):
+        files = sorted(config_folder.glob("stats*.json"), key=lambda p: int(p.stem.removeprefix("stats")))
+        for file in files:
+            stats_book = load_solve_stats_book(file, puzzle_name_from_run_dir(file))
+            stats = next(iter(stats_book.values()))
+            trials.setdefault(config_key(stats.options), []).append(stats)
+    return trials

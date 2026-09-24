@@ -195,9 +195,10 @@ def most_difficult_puzzles(
     constants.DIFFICULTY_COLORS' own tiers, since it isn't part of the game;
     plotting.plot_puzzlebook colors it via constants.FRONTIER_COLOR instead)
     and a real Solution with every one of its solved grids (nr_solutions is
-    `len(solution.grids)`, the same convention the rest of the codebase
-    uses -- e.g. plotting.plot_puzzlebook -- rather
-    than an attribute tacked onto the Puzzle).
+    `len(solution.grids)`, or `len(stats.elapsed)` as plotting.plot_puzzlebook
+    reads it, rather than an attribute tacked onto the Puzzle). The triple
+    has the same shape as serialization.load_run's, so it plots the same
+    way: `plot_puzzlebook(puzzles, stats)`.
     """
     setup = start.setup
     start_empty = start.nr_empty_spaces

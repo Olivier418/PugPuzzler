@@ -49,8 +49,9 @@ def _anchor(path: Path) -> tuple[tuple[str, ...], int]:
 
 def game_book_from_run_dir(path: Path) -> tuple[str, str | None]:
     """(game_name, book_name) of a run folder -- the inverse of
-    Source.relative_dir(), book_name None for a standalone puzzle. A
-    benchmark's config/seed folders nested further down are fine."""
+    Source.relative_dir(), book_name None for a standalone puzzle. Folders
+    or files nested further down (a benchmark's config folders and
+    stats<seed>.json files) are fine."""
     parts, i = _anchor(path)
     return parts[i - 1], parts[i + 1] if parts[i] == "books" else None
 

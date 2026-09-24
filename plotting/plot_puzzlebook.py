@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Callable, NamedTuple
 
 import matplotlib.pyplot as plt
@@ -5,41 +6,44 @@ import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
-from classes import SolutionBook, Solution, SolveStats, SolveStatsBook
+from classes import Puzzle, SolveStats, SolveStatsBook
 from constants import DIFFICULTY_COLORS, FRONTIER_COLOR, FRONTIER_DIFFICULTY, UNKNOWN_DIFFICULTY_COLOR
 
 
 class Metric(NamedTuple):
     """One per-puzzle quantity that can go on an axis. `value` gets the
-    puzzle's Solution (its Puzzle is `sol.puzzle`) and -- only if
-    `needs_stats` -- its SolveStats (None if that book has no entry for
-    it), and returns a float; nan means "not defined for this puzzle"
-    (e.g. the time to the first solution of an unsolved puzzle) and the
-    puzzle is left out."""
+    Puzzle and its SolveStats and returns a float; nan means "not defined
+    for this puzzle" (e.g. the time to the first solution of an unsolved
+    puzzle) and the puzzle is left out."""
     label: str
-    value: Callable[[Solution, SolveStats | None], float]
+    value: Callable[[Puzzle, SolveStats], float]
     log: bool = False
-    needs_stats: bool = False
 
 
-def _solution_time(stats: SolveStats | None, i: int) -> float:
+def _solution_time(stats: SolveStats, i: int) -> float:
     """When the i-th (0 = first, -1 = last) solution was found."""
-    return stats.elapsed[i] if stats is not None and stats.elapsed else np.nan
+    return stats.elapsed[i] if stats.elapsed else np.nan
 
 
 METRICS: dict[str, Metric] = {
-    "nr_empty_spaces": Metric("Empty spaces in puzzle", lambda sol, stats: sol.puzzle.nr_empty_spaces),
-    "nr_solutions": Metric("Number of solutions", lambda sol, stats: len(sol.grids), log=True),
+    "nr_empty_spaces": Metric("Empty spaces in puzzle", lambda puzzle, stats: puzzle.nr_empty_spaces),
+    # one elapsed time per solution found, so its length is the solution count
+    "nr_solutions": Metric("Number of solutions", lambda puzzle, stats: len(stats.elapsed), log=True),
     "time_to_first_solution": Metric(
-        "Time to first solution (s)", lambda sol, stats: _solution_time(stats, 0),
-        log=True, needs_stats=True),
+        "Time to first solution (s)", lambda puzzle, stats: _solution_time(stats, 0), log=True),
     "time_to_last_solution": Metric(
-        "Time to last solution (s)", lambda sol, stats: _solution_time(stats, -1),
-        log=True, needs_stats=True),
-    "solve_time": Metric(
-        "Solve time (s)", lambda sol, stats: stats.duration if stats is not None else np.nan,
-        log=True, needs_stats=True),
+        "Time to last solution (s)", lambda puzzle, stats: _solution_time(stats, -1), log=True),
+    "solve_time": Metric("Solve time (s)", lambda puzzle, stats: stats.duration, log=True),
 }
+
+
+def solved_puzzles(puzzles: Mapping[str, Puzzle], stats: SolveStatsBook) -> list[Puzzle]:
+    """The Puzzle behind each entry of `stats`, in its order, looked up by
+    name in `puzzles` (a run's PuzzleBook from load_run, a game's book, ...)."""
+    missing = [name for name in stats if name not in puzzles]
+    if missing:
+        raise ValueError(f"`puzzles` has no puzzle named {missing} (all of `stats` must be covered).")
+    return [puzzles[name] for name in stats]
 
 
 def _group_label(names: list[str], max_names: int = 3) -> str:
@@ -92,8 +96,8 @@ def _style_3d(ax: plt.Axes) -> None:
 
 
 def plot_puzzlebook(
-    solutions: SolutionBook,
-    stats: SolveStatsBook = None,
+    puzzles: Mapping[str, Puzzle],
+    stats: SolveStatsBook,
     x: str | Metric | None = None,
     y: str | Metric | None = None,
     z: str | Metric | None = None,
@@ -101,7 +105,7 @@ def plot_puzzlebook(
     title: str | None = None,
     ax: plt.Axes = None,
 ) -> plt.Axes:
-    """Scatter plot: one dot per puzzle in `solutions`, colored by
+    """Scatter plot: one dot per puzzle in `stats`, colored by
     difficulty. `x`, `y` (default `nr_empty_spaces`, `nr_solutions`) and --
     for a 3D plot -- `z` each name a per-puzzle quantity from METRICS (`nr_empty_spaces`, `nr_solutions`,
     `time_to_first_solution`, `time_to_last_solution`, `solve_time`), or
@@ -112,9 +116,10 @@ def plot_puzzlebook(
     left out. A 3D axis can't be log-scaled, so there the values are
     log10'd and the ticks labeled as powers of ten instead.
 
-    Difficulty and empty-cell count are read off each Solution's Puzzle.
-    Timing metrics need `stats`, the SolveStatsBook produced alongside
-    `solutions` by the same solve call.
+    Difficulty and empty-cell count are read off each puzzle, found by
+    name in `puzzles` (any mapping covering every puzzle in `stats`, e.g.
+    the PuzzleBook from load_run or the book that was solved); the solution
+    count and timings come from `stats`.
 
     Puzzles that land on the same point (same values, same color) are
     drawn as one dot labeled with all their names, since they'd otherwise
@@ -146,20 +151,15 @@ def plot_puzzlebook(
         if given[2] is not None:
             metrics.append(given[2])
     is_3d = len(metrics) == 3
-    if stats is None and any(m.needs_stats for m in metrics):
-        raise ValueError("A timing metric needs `stats`, the SolveStatsBook solved alongside `solutions`.")
 
-    sols = list(solutions.values())
-    difficulties = [sol.puzzle.difficulty for sol in sols]
-    columns = [
-        np.array([m.value(sol, stats.get(sol.puzzle_name) if stats is not None else None)
-                  for sol in sols], dtype=float)
-        for m in metrics
-    ]
+    rows = list(zip(solved_puzzles(puzzles, stats), stats.values()))
+    names = list(stats)
+    difficulties = [puzzle.difficulty for puzzle, _ in rows]
+    columns = [np.array([m.value(puzzle, s) for puzzle, s in rows], dtype=float) for m in metrics]
 
     # drop the puzzles that can't be drawn: an undefined value, or a
     # non-positive one on a log axis
-    keep = np.ones(len(sols), dtype=bool)
+    keep = np.ones(len(rows), dtype=bool)
     for m, column in zip(metrics, columns):
         keep &= np.isfinite(column)
         if m.log:
@@ -168,7 +168,7 @@ def plot_puzzlebook(
     groups: dict[tuple, list[str]] = {}
     for i in np.flatnonzero(keep):
         key = (*(column[i] for column in columns), _color(difficulties[i], frontier_difficulty))
-        groups.setdefault(key, []).append(sols[i].puzzle_name)
+        groups.setdefault(key, []).append(names[i])
     labels = [_group_label(names) for names in groups.values()]
     colors = [key[-1] for key in groups]
     columns = [np.array([key[d] for key in groups], dtype=float) for d in range(len(metrics))]
