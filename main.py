@@ -40,8 +40,17 @@ if __name__ == "__main__":
     # plot_solve_timeline(solution_book, stats_book)
     # plt.show()
 
-    # stats_books, folder = run_benchmark(IQpuzzler.puzzles['empty_main'], nr_tests=10, T=10)  # configs default to DEFAULT_CONFIGS
-    # stats_books = load_benchmark("benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_3")
+    stats_books, folder = run_benchmark(IQpuzzler.puzzles['empty_main'], nr_tests=15, T=15)  # configs default to DEFAULT_CONFIGS
+    stats_books, folder = run_benchmark(IQpuzzler.puzzles['empty_pyramid'], nr_tests=15, T=15)  # configs default to DEFAULT_CONFIGS
+    
+    stats_books, folder = run_benchmark(IQpuzzlerPRO.puzzles['empty_main'], nr_tests=15, T=15)  # configs default to DEFAULT_CONFIGS
+    stats_books, folder = run_benchmark(IQpuzzlerPRO.puzzles['empty_pyramid'], nr_tests=15, T=15)  # configs default to DEFAULT_CONFIGS
+    stats_books, folder = run_benchmark(IQpuzzlerPRO.puzzles['empty_alt'], nr_tests=15, T=15)  # configs default to DEFAULT_CONFIGS
+    
+    stats_books, folder = run_benchmark(IQquub.puzzles['empty_cube'], nr_tests=15, T=15)  # configs default to DEFAULT_CONFIGS
+
+
+    # stats_books = load_benchmark("benchmarks\\IQpuzzler\\puzzles\\empty_main\\benchmark_1")
     # plot_benchmark(stats_books)
     # plt.show()
 
