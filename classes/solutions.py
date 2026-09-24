@@ -3,13 +3,8 @@ from typing import NamedTuple
 
 import numpy as np
 
-from constants import EMPTY
-from .state import State
-
-
-class PuzzleInfo(NamedTuple):
-    difficulty: str | None
-    nr_empty_spaces: int
+from .setup import Setup
+from .state import Puzzle, State
 
 
 class SolveStats(NamedTuple):
@@ -18,7 +13,7 @@ class SolveStats(NamedTuple):
     solutions are deterministic, but how long it took / which solver
     options+seed were used is a property of the run, not of the
     solutions. `options` is whatever keyword arguments the solver was
-    given besides the seed (currently none; kept so runs of different
+    given besides the seed (`branch`, `order`; kept so runs of different
     solver variants can be told apart and compared by benchmark.py)."""
     puzzle_name: str
     options: dict
@@ -39,84 +34,49 @@ def _book_name(book_name: str | None, puzzle_names) -> str | None:
 
 
 class Solution:
-    """Lean output container referencing a puzzle by ID, plus -- when it
-    was produced in this session rather than loaded back from disk -- a
-    live reference to the Puzzle it was solved from. A Solution loaded
-    from disk has no live puzzle; use `serialization.solution_states` /
-    `serialization.solution_puzzle_info` to resolve those from the game
-    files instead.
+    """One Puzzle's solutions: the Puzzle itself plus every grid that
+    solves it (full board-shaped, see Setup.to_full_grid).
+
+    The Puzzle is always live -- the one solving.py solved, or the one
+    serialization.load_solution_run found in games/ -- so everything
+    about it (name, difficulty, empty spaces, Setup) is read off it rather
+    than copied here, where it could drift.
 
     Producing one (solving + saving) lives in `solving.py`."""
 
-    def __init__(
-        self,
-        puzzle_name: str,
-        grids: list[np.ndarray],
-        game_name: str = None,
-        book_name: str = None,
-        puzzle=None,
-    ):
-        self.puzzle_name = puzzle_name
+    def __init__(self, puzzle: Puzzle, grids: list[np.ndarray]):
+        self.puzzle = puzzle
         self.grids = grids
-        self.game_name = game_name
-        self.book_name = book_name
-        self.puzzle = puzzle  # live reference only; never written to disk
 
     @property
-    def setup(self):
-        return self.puzzle.setup if self.puzzle is not None else None
+    def puzzle_name(self) -> str:
+        return self.puzzle.name
 
-    def to_states(self, setup=None) -> list[State]:
-        """Hydrate result grids into executable State objects, using
-        `setup` or else the live puzzle's. Raises without either."""
-        setup = setup or self.setup
-        if setup is None:
-            raise ValueError(
-                "No Setup to hydrate with: this Solution has no live puzzle. Pass `setup=` "
-                "or use serialization.solution_states."
-            )
+    @property
+    def setup(self) -> Setup:
+        return self.puzzle.setup
+
+    def to_states(self) -> list[State]:
+        """The solved grids as States on the puzzle's Setup."""
         states = []
         for grid in self.grids:
-            state = State(setup)
-            state.grid = setup.to_compact_grid(grid)
+            state = State(self.setup)
+            state.grid = self.setup.to_compact_grid(grid)
             states.append(state)
         return states
 
-    def puzzle_info(self, puzzles=None) -> PuzzleInfo:
-        """The source Puzzle's difficulty and empty-cell count. These
-        aren't stored on Solution itself -- they're facts about the
-        Puzzle, and duplicating them here would let them drift -- so they
-        are read off the live `puzzle`, else off `puzzles` (a PuzzleBook,
-        or any puzzle_name -> Puzzle mapping). With neither, use
-        serialization.solution_puzzle_info, which reads the game's JSON."""
-        puzzle = self.puzzle if self.puzzle is not None else (puzzles or {}).get(self.puzzle_name)
-        if puzzle is None:
-            raise ValueError(
-                "No Puzzle to read info from: this Solution has no live puzzle and none was "
-                "passed in `puzzles`. Use serialization.solution_puzzle_info."
-            )
-        return PuzzleInfo(puzzle.difficulty, int((puzzle.grid == EMPTY).sum()))
-
     def __repr__(self) -> str:
-        if self.setup is None:
-            return f"Solution to puzzle {self.puzzle_name} ({len(self.grids)} solutions)"
         if not self.grids:
             return f"Solution to puzzle {self.puzzle_name} (no results)"
         return "\n\n".join(
-            state.setup.render(state.grid, header=f"Solution {i} to puzzle {self.puzzle_name}")
+            self.setup.render(state.grid, header=f"Solution {i} to puzzle {self.puzzle_name}")
             for i, state in enumerate(self.to_states(), start=1)
         )
 
 
 class SolutionBook(UserDict):
-    """Container for batch solution results."""
-    def __init__(
-        self,
-        *solutions: Solution,
-        game_name: str = None,
-        book_name: str = None,
-    ):
-        self.game_name = game_name
+    """Container for batch solution results, keyed by puzzle name."""
+    def __init__(self, *solutions: Solution, book_name: str = None):
         self.book_name = book_name
         super().__init__({sol.puzzle_name: sol for sol in solutions})
 
@@ -135,12 +95,10 @@ class SolveStatsBook(UserDict):
     def __init__(
         self,
         *stats: SolveStats,
-        game_name: str = None,
         book_name: str = None,
         options: dict = None,
         seed: int = None,
     ):
-        self.game_name = game_name
         self.book_name = book_name
         self.options = dict(options or {})
         self.seed = seed

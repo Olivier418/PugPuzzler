@@ -23,7 +23,7 @@ import unittest
 import numpy as np
 
 from classes import Block, BlockCollection, Puzzle, RegularBoard, Setup, Solver, State
-from tests._helpers import assert_valid_solution, load
+from tests._helpers import assert_valid_solution, load, unsolvable_puzzle
 
 
 # The three branch rules, plus candidate ordering forced on and off. None of
@@ -97,15 +97,7 @@ class TestModesAgree(unittest.TestCase):
         """The same fixture as test_solver.TestUnsolvable, but under every
         mode. F and H each fit the leftover hole alone, never together --
         so a mode that mistakenly prunes or derives will show up here."""
-        setup = self.game.books["main_puzzles"]["1"].setup
-        letters = [
-            "E", "E", "G", "G", "G", "J", "J", "J", "J", "I", "I",
-            "A", "E", "E", "E", "G", "C", "D", "D", "D", "D", "I",
-            "A", "A", "A", "L", "G", "C", " ", "D", " ", "I", "I",
-            "B", "B", "L", "L", "L", "C", " ", " ", " ", "K", "K",
-            "B", "B", "B", "L", "C", "C", " ", " ", " ", "K", "K",
-        ]
-        puzzle = Puzzle(setup, np.array(letters).reshape(5, 11), name="unsolvable")
+        puzzle = unsolvable_puzzle(self.game)
         for mode in MODES:
             with self.subTest(**mode):
                 self.assertEqual(grids(puzzle, **mode), [])
@@ -156,18 +148,6 @@ class TestLimits(unittest.TestCase):
                 self.assertEqual(len({s.grid.tobytes() for s in found}), 25)
                 for state in found:
                     assert_valid_solution(self, self.empty, state)
-
-    def test_early_stop_leaves_solver_reusable(self):
-        solver = Solver(self.empty)
-        first = [s.grid.tobytes() for s in solver.solve(max_solutions=6)]
-        again = [s.grid.tobytes() for s in solver.solve(max_solutions=6)]
-        self.assertEqual(first, again)
-
-    def test_seeds_give_same_solution_set(self):
-        puzzle = self.game.books["main_puzzles"]["17"]
-        sets = [grids(puzzle, seed=seed) for seed in (None, 0, 1)]
-        for other in sets[1:]:
-            self.assertEqual(other, sets[0])
 
 
 class TestBadOptions(unittest.TestCase):

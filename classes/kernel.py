@@ -8,14 +8,11 @@ between this module's flat integer world and those objects.
 **Representation.** A cell is a bit. The board's occupancy is `occ`, an
 array of `NW = ceil(n_cells / 64)` uint64 words, and a placement is the
 same thing precomputed (`pmask[gid]`). "Does this placement fit" is then
-one AND per word, against the previous design's per-node cost of
-streaming a ~550-entry conflict list out of a ~4.5 MB array. Here the
-conflict test reads 8 bytes.
+one AND per word: the conflict test reads 8 bytes.
 
-That buys a node roughly 5x cheaper than the old NumPy search, but far
-less than the raw node rate suggests: the difference is `choose_item`,
-which has to look at the candidate lists to stay well-informed, and that
-scan -- not the conflict test -- is now what a node costs.
+That makes the conflict test nearly free, so what a node costs is
+`choose_item`, which has to look at the candidate lists to stay
+well-informed.
 
 **Branching.** A node branches on the scarcest *item*, and an item is
 either an empty cell (try every placement covering it) or an unplaced
@@ -30,7 +27,7 @@ the one-word boundary) both give NW == 1, and a 200-cell board would give
 NW == 4 and work unchanged. The word loop costs ~1.19x against a
 hand-written scalar kernel.
 
-**Global ids.** As before, a placement's global id is its row in `pmask`,
+**Global ids.** A placement's global id is its row in `pmask`,
 and block position p owns the contiguous run
 `block_start[p]:block_start[p + 1]`, so a block-local placement index is
 `gid - block_start[p]`. Nothing ever reorders these rows.
@@ -69,7 +66,7 @@ BRANCH_BOTH = 2   # whichever of the two is scarcer (the default)
 # Ranking rules, see rank().
 RANK_NONE = 0     # leave candidates in table order
 RANK_PRIORITY = 1  # by the per-solve random priority alone (seeded, order=False)
-RANK_COUNTS = 2   # the faithful port of the old _order_gids
+RANK_COUNTS = 2   # scarcest cells' live counts first (order=True)
 RANK_POCKETS = 3  # fewest dead empty cells created
 RANK_FANOUT = 4   # most options left for the next cell
 
@@ -100,13 +97,11 @@ class Tables(NamedTuple):
     fan: int                # widest candidate list: max(cell degree, block run)
 
 
-def build_tables(placement_cells, n_cells, cell_coords=None, unit_vectors=None):
+def build_tables(placement_cells, n_cells, cell_coords, unit_vectors):
     """Tables from a Setup's `placement_cells` (block idx -> (N, k) array
-    of compact cell indices) and its cell count.
-
-    `cell_coords` / `unit_vectors` are only needed for RANK_POCKETS'
-    adjacency; without them `neigh` is all zeros and that rule degrades to
-    a no-op rather than failing.
+    of compact cell indices), its cell count, and -- for RANK_POCKETS'
+    adjacency -- the board position of every compact cell and the
+    lattice's unit vectors.
 
     Returns `(tables, block_ids)`. `block_ids[p]` is the caller's block
     key for block position p -- this module only ever speaks positions.
@@ -139,7 +134,6 @@ def build_tables(placement_cells, n_cells, cell_coords=None, unit_vectors=None):
             pmask[gid, int(c) >> 6] |= BIT[int(c) & 63]
 
     # CSR: the placements through each cell, ascending within a cell.
-    # Same construction as the old _Tables.item_lists, minus the block half.
     flat = pcells.ravel()
     real = flat >= 0
     cell_of = flat[real].astype(np.int64)
@@ -153,16 +147,15 @@ def build_tables(placement_cells, n_cells, cell_coords=None, unit_vectors=None):
     for c in range(n_cells):
         full[c >> 6] |= BIT[c & 63]
 
+    # Two cells are neighbours when their coordinates differ by a lattice
+    # unit vector. Used only by RANK_POCKETS.
     neigh = np.zeros((n_cells, nw), dtype=np.uint64)
-    if cell_coords is not None and unit_vectors is not None and n_cells:
-        # Two cells are neighbours when their coordinates differ by a
-        # lattice unit vector. Used only by RANK_POCKETS.
-        lookup = {tuple(row): i for i, row in enumerate(cell_coords)}
-        for i, row in enumerate(cell_coords):
-            for v in unit_vectors:
-                j = lookup.get(tuple(row + v))
-                if j is not None:
-                    neigh[i, j >> 6] |= BIT[j & 63]
+    lookup = {tuple(row): i for i, row in enumerate(cell_coords)}
+    for i, row in enumerate(cell_coords):
+        for v in unit_vectors:
+            j = lookup.get(tuple(row + v))
+            if j is not None:
+                neigh[i, j >> 6] |= BIT[j & 63]
 
     fan = int(max(np.diff(cell_start).max(initial=1), np.diff(block_start).max(initial=1)))
     return Tables(pmask, pblock, pcells, psize, cell_start, cell_pl, block_start,
@@ -251,9 +244,8 @@ def _live(pmask, pblock, gid, occ, used, nw):
 
 
 @njit(cache=True)
-def collect_cell(t, c, occ, used, out):
+def collect_cell(t, c, occ, used, nw, out):
     """Live placements covering cell `c`, in table order. Returns how many."""
-    nw = occ.shape[0]
     n = 0
     for i in range(t.cell_start[c], t.cell_start[c + 1]):
         gid = t.cell_pl[i]
@@ -286,11 +278,10 @@ def _count_cell(t, c, occ, used, nw, cap):
 
 
 @njit(cache=True)
-def collect_block(t, pos, occ, used, out):
+def collect_block(t, pos, occ, used, nw, out):
     """Live placements of block position `pos`, in table order. The
     block-branch counterpart of collect_cell -- same `_live`, so the two
     candidate sets are filtered identically. Returns how many."""
-    nw = occ.shape[0]
     n = 0
     for gid in range(t.block_start[pos], t.block_start[pos + 1]):
         if _live(t.pmask, t.pblock, gid, occ, used, nw):
@@ -378,7 +369,7 @@ def choose_item(t, occ, used, nw, branch):
 
 
 @njit(cache=True)
-def _cell_count(t, c, occ, used, cnt, stamp, stamp_id):
+def _cell_count(t, c, occ, used, nw, cnt, stamp, stamp_id):
     """Live placements through cell `c`, memoised for this node.
 
     Bounds RANK_COUNTS at one pass per *distinct* cell the candidates
@@ -386,11 +377,7 @@ def _cell_count(t, c, occ, used, cnt, stamp, stamp_id):
     """
     if stamp[c] == stamp_id:
         return cnt[c]
-    nw = occ.shape[0]
-    n = 0
-    for i in range(t.cell_start[c], t.cell_start[c + 1]):
-        if _live(t.pmask, t.pblock, t.cell_pl[i], occ, used, nw):
-            n += 1
+    n = _count_cell(t, c, occ, used, nw, _INF)
     cnt[c] = n
     stamp[c] = stamp_id
     return n
@@ -420,6 +407,7 @@ def _pocket_score(t, gid, occ, nw):
 def _fanout_score(t, gid, occ, used, nw):
     """Live placements left for the first cell still empty after `gid`
     goes down. Fewer means the branch is closer to forced."""
+    used = used | BIT[t.pblock[gid]]  # gid's own block is placed too
     n_after = 0
     for c in range(t.n_cells):
         w, b = c >> 6, c & 63
@@ -427,7 +415,7 @@ def _fanout_score(t, gid, occ, used, nw):
             continue
         for i in range(t.cell_start[c], t.cell_start[c + 1]):
             g2 = t.cell_pl[i]
-            if g2 == gid or used & BIT[t.pblock[g2]] != _U0:
+            if used & BIT[t.pblock[g2]] != _U0:
                 continue
             ok = True
             for v in range(nw):
@@ -460,8 +448,7 @@ def rank(t, cands, n, occ, used, rule, priority, cnt, stamp, stamp_id, key, idx)
     """
     if n < 2 or rule == RANK_NONE:
         # Survivors per node are mean 1.0, median 0 -- this short-circuits
-        # the large majority of nodes, which is why ranking is cheap here
-        # in a way the old np.lexsort could never be.
+        # the large majority of nodes, which is why ranking is cheap.
         return
     nw = occ.shape[0]
     kmax = t.pcells.shape[1]
@@ -473,15 +460,14 @@ def rank(t, cands, n, occ, used, rule, priority, cnt, stamp, stamp_id, key, idx)
         for j in range(width):
             key[i, j] = _INF
         if rule == RANK_COUNTS:
-            # The old _order_gids key: each cell's live-placement count,
-            # sorted ascending and compared like a tuple, so a placement
-            # covering the scarcest cells sorts first. Reproduced exactly
-            # -- live[g] here is bit-for-bit the old live[g].
+            # Each cell's live-placement count, sorted ascending and
+            # compared like a tuple, so a placement covering the scarcest
+            # cells sorts first.
             m = 0
             for j in range(t.psize[gid]):
                 c = t.pcells[gid, j]
                 if c >= 0:
-                    key[i, m] = _cell_count(t, c, occ, used, cnt, stamp, stamp_id)
+                    key[i, m] = _cell_count(t, c, occ, used, nw, cnt, stamp, stamp_id)
                     m += 1
             for a in range(1, m):          # insertion sort, m <= kmax <= 8
                 v = key[i, a]
@@ -557,8 +543,8 @@ def kernel(t, w, cap, budget, rule, priority, branch):
 
     while True:
         if need_frame == 1:
-            # Is the board full? That alone means solved: Setup._validate
-            # guarantees the blocks' cells exactly tile the board and that
+            # Is the board full? That alone means solved: Setup._validate_area
+            # guarantees the blocks' total area equals the board's, and
             # pre-placed blocks fill whole placements, so a cover of every
             # cell by distinct unplaced blocks has necessarily used all of
             # them. The converse holds too, which is what makes
@@ -591,9 +577,9 @@ def kernel(t, w, cap, budget, rule, priority, branch):
             # both kinds of candidate list.
             kind, i = choose_item(t, w.occ, w.used[0], nw, branch)
             if kind == 0:
-                n = collect_cell(t, i, w.occ, w.used[0], w.st_cands[depth])
+                n = collect_cell(t, i, w.occ, w.used[0], nw, w.st_cands[depth])
             else:
-                n = collect_block(t, i, w.occ, w.used[0], w.st_cands[depth])
+                n = collect_block(t, i, w.occ, w.used[0], nw, w.st_cands[depth])
             # The memo stamp has to be unique per node across the WHOLE
             # run, not per call: `nodes` restarts at 0 every chunk, so
             # deriving the stamp from it would let a node reuse a stale
@@ -656,7 +642,5 @@ def warmup(t):
         return
     priority = np.arange(t.pmask.shape[0], dtype=np.int32)
     w = make_workspace(t, np.zeros(t.full.size, dtype=np.uint64), np.uint64(0), cap=1)
-    for branch in (BRANCH_BOTH, BRANCH_CELL, BRANCH_BLOCK):
-        kernel(t, w, 1, 1, RANK_COUNTS, priority, branch)
-        kernel(t, w, 1, 1, RANK_NONE, priority, branch)
+    kernel(t, w, 1, 1, RANK_COUNTS, priority, BRANCH_BOTH)
     _warm = True

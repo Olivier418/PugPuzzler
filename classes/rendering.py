@@ -13,6 +13,10 @@ from .blocks import Block, BlockCollection
 from .boards import Board
 
 
+def _colored_cell(block: Block) -> str:
+    return f"{block.terminal_color}{block.letter} {Style.RESET_ALL}"
+
+
 def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray) -> list[str]:
     """Render any grid shaped like `board` -- a State's own grid, a
     solved grid from Solver, or otherwise -- into a list of
@@ -43,8 +47,7 @@ def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray) -> list[
                 if cell == EMPTY:
                     row_chars.append('  ')
                 elif cell >= 0:
-                    txt = f"{blocks[cell].letter} "
-                    row_chars.append(f"{blocks[cell].terminal_color}{txt}{Style.RESET_ALL}")
+                    row_chars.append(_colored_cell(blocks[cell]))
                 else:  # cell == OUTSIDE_BOARD
                     n, s = padded[c, r-1] != OUTSIDE_BOARD, padded[c, r+1] != OUTSIDE_BOARD
                     w, e = padded[c-1, r] != OUTSIDE_BOARD, padded[c+1, r] != OUTSIDE_BOARD
@@ -108,8 +111,7 @@ def block_shape_lines(block: Block) -> tuple[list[str], int]:
             row_chars = []
             for c in range(width):
                 if layer[c, r]:
-                    txt = f"{block.letter} "
-                    row_chars.append(f"{block.terminal_color}{txt}{Style.RESET_ALL}")
+                    row_chars.append(_colored_cell(block))
                 else:
                     row_chars.append('  ')
             lines.append(''.join(row_chars))
@@ -119,38 +121,17 @@ def block_shape_lines(block: Block) -> tuple[list[str], int]:
     return ['  '.join(row_tuple) for row_tuple in zip(*layer_strings)], combined_width
 
 
-def legend_lines(
-    blocks: BlockCollection,
-    block_idcs,
-    max_width_cells: int = None,
-) -> list[str]:
+def legend_lines(blocks: BlockCollection, block_idcs) -> list[str]:
     """Arrange the shape diagrams of several blocks (e.g. a State's
-    unplaced blocks) side by side in a row, wrapping onto further rows
-    once `max_width_cells` (in 2-char cell units) would be exceeded --
-    used to lay unplaced blocks out underneath the board."""
+    unplaced blocks) side by side in one row, used to lay unplaced blocks
+    out underneath the board."""
     entries = [block_shape_lines(blocks[idx]) for idx in sorted(block_idcs)]
     if not entries:
         return []
 
-    gap_cells = 1
-    rows, current_row, current_width = [], [], 0
-    for lines, width in entries:
-        extra = width + (gap_cells if current_row else 0)
-        if current_row and max_width_cells is not None and current_width + extra > max_width_cells:
-            rows.append(current_row)
-            current_row, current_width, extra = [], 0, width
-        current_row.append((lines, width))
-        current_width += extra
-    rows.append(current_row)
-
-    gap = '  ' * gap_cells
-    out_lines = []
-    for row in rows:
-        row_height = max(len(lines) for lines, _ in row)
-        columns = [lines + ['  ' * width] * (row_height - len(lines)) for lines, width in row]
-        for r in range(row_height):
-            out_lines.append(gap.join(col[r] for col in columns))
-    return out_lines
+    row_height = max(len(lines) for lines, _ in entries)
+    columns = [lines + ['  ' * width] * (row_height - len(lines)) for lines, width in entries]
+    return ['  '.join(col[r] for col in columns) for r in range(row_height)]
 
 
 def render(

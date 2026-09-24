@@ -44,14 +44,7 @@ def make_result(
     """Package one solver run of `puzzle` as a (Solution, SolveStats).
     `grids` are full board-shaped (see Setup.to_full_grid), matching the
     on-disk format even though State.grid itself is compact."""
-    source = puzzle.source
-    solution = Solution(
-        puzzle_name=puzzle.name,
-        grids=grids,
-        game_name=source.game_name if source else None,
-        book_name=source.book_name if source else None,
-        puzzle=puzzle,
-    )
+    solution = Solution(puzzle, grids)
     stats = SolveStats(
         puzzle_name=puzzle.name,
         options=dict(options),
@@ -65,15 +58,11 @@ def make_result(
 def single_run_books(solution: Solution, stats: SolveStats) -> tuple[SolutionBook, SolveStatsBook]:
     """Wrap one puzzle's (Solution, SolveStats) in book containers, which is
     what buys save_solution_run/load_solution_run compatibility."""
+    source = solution.puzzle.source
+    book_name = source.book_name if source else None
     return (
-        SolutionBook(solution, game_name=solution.game_name, book_name=solution.book_name),
-        SolveStatsBook(
-            stats,
-            game_name=solution.game_name,
-            book_name=solution.book_name,
-            options=stats.options,
-            seed=stats.seed,
-        ),
+        SolutionBook(solution, book_name=book_name),
+        SolveStatsBook(stats, book_name=book_name, options=stats.options, seed=stats.seed),
     )
 
 
@@ -142,7 +131,6 @@ def solve_puzzle(
 
 def solve_puzzlebook(
     puzzlebook: PuzzleBook,
-    game_name: str = None,
     seed: int = None,
     verbose: int = Verbosity.SILENT,
     save: bool = False,
@@ -163,9 +151,6 @@ def solve_puzzlebook(
     can't drift apart; only the batching and the single combined save are
     specific to this function.
     """
-    source = puzzlebook.source
-    book_name = puzzlebook.name
-    game_name = game_name or (source.game_name if source else None)
     solutions = []
     stats_list = []
 
@@ -179,21 +164,14 @@ def solve_puzzlebook(
             max_solutions=max_solutions,
             **options,
         )
-        # Individual puzzles carry their own Source, but this
-        # SolutionBook is filed under the book's own game/book name --
-        # keep every Solution in it consistent with that.
-        solution.game_name = game_name
-        solution.book_name = book_name
         solutions.append(solution)
         stats_list.append(stats)
 
-    solution_book = SolutionBook(*solutions, game_name=game_name, book_name=book_name)
-    stats_book = SolveStatsBook(
-        *stats_list, game_name=game_name, book_name=book_name, options=options, seed=seed
-    )
+    solution_book = SolutionBook(*solutions, book_name=puzzlebook.name)
+    stats_book = SolveStatsBook(*stats_list, book_name=puzzlebook.name, options=options, seed=seed)
 
     if save:
-        target = Path(path) if path is not None else next_run_dir(source, solutions_root)
+        target = Path(path) if path is not None else next_run_dir(puzzlebook.source, solutions_root)
         save_solution_run(solution_book, stats_book, target, flat=False)
 
     return solution_book, stats_book

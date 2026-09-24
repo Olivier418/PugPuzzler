@@ -8,6 +8,8 @@ from .setup import Setup
 
 class PuzzleBook(UserDict):
     def __init__(self, *puzzles, name: str = None):
+        if not puzzles:
+            raise ValueError(f"A PuzzleBook needs at least one puzzle (book {name!r} is empty).")
         _assert_unique(puzzles, lambda p: p.name, "puzzle name")
         # Every puzzle in a book is built from one shared Setup (that's
         # the whole point -- see Setup's docstring), so the book can
@@ -33,4 +35,4 @@ class PuzzleBook(UserDict):
     def __repr__(self) -> str:
         header = f"Puzzle Book {self.name}" if self.name else "Puzzle Book"
         body = "\n\n".join(p.render(show_leftover=False) for p in self.values())
-        return f"{header}\n\n{body}" if body else header
+        return f"{header}\n\n{body}"

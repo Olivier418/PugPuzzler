@@ -24,28 +24,28 @@ class Setup:
     def __init__(self, blocks: BlockCollection, board: Board):
         self.board = board
         self.blocks = blocks
-        self.placement_cells = self._compute_placement_indices()
-        self._validate()
+        self._validate_area()
 
         # Compact indexing: internally, grids only ever cover the board's
         # real cells (no OUTSIDE_BOARD dead weight -- can be ~half the
         # array on a PyramidBoard). compact_to_flat/flat_to_compact map
         # between that dense 0..n_cells-1 range and the full board-shaped
-        # flat indexing placements were originally computed in.
+        # flat indexing placements are computed in.
         cells_flat = self.board.cells.ravel()
         self.compact_to_flat = np.flatnonzero(cells_flat)
         self.n_cells = self.compact_to_flat.size
         self.flat_to_compact = np.full(cells_flat.size, -1, dtype=np.int64)
         self.flat_to_compact[self.compact_to_flat] = np.arange(self.n_cells)
 
-        # Placements are computed above as flat indices into the full
-        # board shape; re-base them into compact space once here so every
-        # other consumer (State.grid, Solver) only ever deals with the
-        # dense range.
+        # Placements are computed as flat indices into the full board
+        # shape and re-based into compact space once here, so every other
+        # consumer (State.grid, Solver) only ever deals with the dense
+        # range.
         self.placement_cells = {
             idx: self.flat_to_compact[flat]
-            for idx, flat in self.placement_cells.items()
+            for idx, flat in self._compute_placement_indices().items()
         }
+        self._validate_placements()
 
     def _valid_orientations(self, block: Block) -> list[np.ndarray]:
         k = block.ndim
@@ -116,7 +116,8 @@ class Setup:
             )
         return result
 
-    def _validate(self):
+    def _validate_area(self):
+        """Cheap check, run before the expensive placement enumeration."""
         total_cells = sum(b.count for b in self.blocks.values())
         board_cells = np.sum(self.board.cells)
         if total_cells != board_cells:
@@ -124,6 +125,7 @@ class Setup:
                 f"Total block cells ({total_cells}) do not match board cells ({board_cells})."
             )
 
+    def _validate_placements(self):
         for idx, placements in self.placement_cells.items():
             if len(placements) == 0:
                 raise ValueError(f"Block {idx} has no valid placements on the board.")

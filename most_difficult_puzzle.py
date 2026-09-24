@@ -2,7 +2,7 @@
 `start` puzzle: fewer solutions and/or more empty spaces, never worse on
 either.
 
-Since Setup._validate guarantees the blocks exactly tile the board,
+Since Setup._validate_area guarantees the blocks' total area equals the board's,
 nr_empty_spaces of a candidate depends only on *which* blocks are
 pre-placed, never on *which placement* is used -- so the search is really
 just the 2**n_blocks subsets of blocks (same space regardless of how many
@@ -37,12 +37,13 @@ constants.FRONTIER_DIFFICULTY) for plotting.plot_puzzlebook, and named A, B,
 C, ... in order of decreasing nr_empty_spaces.
 """
 import itertools
+from typing import NamedTuple
 
 import numpy as np
 from tqdm import tqdm
 
 from classes import Puzzle, PuzzleBook, SolutionBook, SolveStatsBook, State
-from constants import EMPTY, FRONTIER_DIFFICULTY
+from constants import FRONTIER_DIFFICULTY
 from solving import solve_puzzlebook
 
 
@@ -113,25 +114,20 @@ def _best_realization(setup, subset: tuple[int, ...], ceiling: int):
     return best
 
 
-def _dominates(a: tuple[Puzzle, int], b: tuple[Puzzle, int]) -> bool:
+class Candidate(NamedTuple):
+    """A puzzle that survived the search, with its difficulty axes carried
+    alongside it rather than recomputed from the grid or stored on Puzzle."""
+    puzzle: Puzzle
+    nr_empty: int
+    nr_solutions: int
+
+
+def _dominates(a: Candidate, b: Candidate) -> bool:
     """True if `a` is at least as difficult as `b` (>= empty spaces, <=
-    solutions) and strictly more difficult on at least one. `a`/`b` are
-    (Puzzle, nr_solutions) pairs -- nr_solutions is carried alongside the
-    Puzzle rather than on it, see most_difficult_puzzles."""
-    (a_puzzle, a_sol), (b_puzzle, b_sol) = a, b
-    a_empty, b_empty = int((a_puzzle.grid == EMPTY).sum()), int((b_puzzle.grid == EMPTY).sum())
-    at_least_as_hard = a_empty >= b_empty and a_sol <= b_sol
-    strictly_harder = a_empty > b_empty or a_sol < b_sol
+    solutions) and strictly more difficult on at least one."""
+    at_least_as_hard = a.nr_empty >= b.nr_empty and a.nr_solutions <= b.nr_solutions
+    strictly_harder = a.nr_empty > b.nr_empty or a.nr_solutions < b.nr_solutions
     return at_least_as_hard and strictly_harder
-
-
-def pareto_frontier(candidates: list[tuple[Puzzle, int]]) -> list[tuple[Puzzle, int]]:
-    """The mutually non-dominated subset of `candidates`, a list of
-    (Puzzle, nr_solutions) pairs."""
-    return [
-        c for c in candidates
-        if not any(_dominates(other, c) for other in candidates if other is not c)
-    ]
 
 
 def _letter_name(i: int) -> str:
@@ -144,7 +140,7 @@ def _letter_name(i: int) -> str:
     return name
 
 
-def _ceiling(nr_empty: int, frontier: list[tuple[Puzzle, int]], start_empty: int, start_solutions: int) -> int:
+def _ceiling(nr_empty: int, frontier: list[Candidate], start_empty: int, start_solutions: int) -> int:
     """The most solutions a candidate with `nr_empty` empty spaces can have
     and still survive: it must beat `start` (>= its solutions if it has more
     empty spaces, strictly fewer if equally many) and not be dominated by
@@ -153,8 +149,8 @@ def _ceiling(nr_empty: int, frontier: list[tuple[Puzzle, int]], start_empty: int
     strictly fewer solutions; equally many: a tie is fine). 0 or less means
     nothing can survive."""
     ceiling = start_solutions - (nr_empty == start_empty)
-    for puzzle, nr_solutions in frontier:
-        ceiling = min(ceiling, nr_solutions - (int((puzzle.grid == EMPTY).sum()) > nr_empty))
+    for member in frontier:
+        ceiling = min(ceiling, member.nr_solutions - (member.nr_empty > nr_empty))
     return ceiling
 
 
@@ -200,11 +196,11 @@ def most_difficult_puzzles(
     plotting.plot_puzzlebook colors it via constants.FRONTIER_COLOR instead)
     and a real Solution with every one of its solved grids (nr_solutions is
     `len(solution.grids)`, the same convention the rest of the codebase
-    uses -- e.g. Solution.puzzle_info, plotting.plot_puzzlebook -- rather
+    uses -- e.g. plotting.plot_puzzlebook -- rather
     than an attribute tacked onto the Puzzle).
     """
     setup = start.setup
-    start_empty = int((start.grid == EMPTY).sum())
+    start_empty = start.nr_empty_spaces
     start_solutions = sum(1 for _ in start.solve())
 
     block_idxs = list(setup.blocks.keys())
@@ -217,17 +213,17 @@ def most_difficult_puzzles(
     )
     # Subsets with fewer empty spaces than `start` can never beat it, so they
     # are dropped up front (this also keeps the progress bar's total honest).
+    with_empty = (
+        (setup.n_cells - sum(setup.blocks[idx].count for idx in s), s) for s in all_subsets
+    )
     subsets = sorted(
-        (s for s in all_subsets
-         if setup.n_cells - sum(setup.blocks[idx].count for idx in s) >= start_empty),
-        key=lambda subset: setup.n_cells - sum(setup.blocks[idx].count for idx in subset),
+        (e_s for e_s in with_empty if e_s[0] >= start_empty),
+        key=lambda e_s: e_s[0],
         reverse=True,
     )
 
-    frontier: list[tuple[Puzzle, int]] = []  # maintained mutually non-dominated throughout
-    for subset in tqdm(subsets, desc="Searching block subsets", unit="subset", disable=not verbose):
-        nr_empty = setup.n_cells - sum(setup.blocks[idx].count for idx in subset)
-
+    frontier: list[Candidate] = []  # maintained mutually non-dominated throughout
+    for nr_empty, subset in tqdm(subsets, desc="Searching block subsets", unit="subset", disable=not verbose):
         ceiling = _ceiling(nr_empty, frontier, start_empty, start_solutions)
         if ceiling < 1:
             continue  # no realization of this subset can survive, so don't even look
@@ -242,22 +238,22 @@ def most_difficult_puzzles(
         puzzle = Puzzle(setup, name=f"candidate {sorted(subset)}")
         for idx, placement_idx in placements.items():
             puzzle.place_unchecked(idx, placement_idx)
-        candidate = (puzzle, nr_solutions)
+        candidate = Candidate(puzzle, nr_empty, nr_solutions)
 
         if any(_dominates(f, candidate) for f in frontier):
             continue  # the shared ceiling was a safe over-approximation -- this one didn't
         frontier = [f for f in frontier if not _dominates(candidate, f)] + [candidate]
 
-    game_name = start.source.game_name if start.source else None
-    book_name = f"harder_than_{start.name}" if start.name else "most_difficult"
+    if not frontier:
+        raise ValueError(f"No puzzle on this Setup beats {start.name!r}.")
 
-    frontier.sort(key=lambda f: (-int((f[0].grid == EMPTY).sum()), f[1]))
+    frontier.sort(key=lambda f: (-f.nr_empty, f.nr_solutions))
     puzzles = []
-    for i, (puzzle, _) in enumerate(frontier):
+    for i, (puzzle, _, _) in enumerate(frontier):
         puzzle.name = _letter_name(i)
         puzzle.difficulty = difficulty
         puzzles.append(puzzle)
 
-    book = PuzzleBook(*puzzles, name=book_name)
-    solutions, stats = solve_puzzlebook(book, game_name=game_name, save=False)
+    book = PuzzleBook(*puzzles, name=f"harder_than_{start.name}" if start.name else "most_difficult")
+    solutions, stats = solve_puzzlebook(book)
     return book, solutions, stats

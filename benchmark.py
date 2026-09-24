@@ -3,15 +3,16 @@ seeds, each trial in a subprocess with a wall-clock cap, save the runs, and
 load them back. Plotting the results lives in plotting/plot_benchmark.py."""
 import time
 import multiprocessing
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
 
-from classes import Puzzle, SolutionBook, SolveStatsBook
+from classes import Game, Puzzle, SolutionBook, SolveStatsBook
 from constants import BENCHMARK_DIR
 from serialization import save_solution_run, load_solution_run
-from serialization.paths import next_free_idx_dir
+from serialization.paths import next_run_dir
 from solving import make_result, single_run_books
 
 
@@ -25,11 +26,12 @@ from solving import make_result, single_run_books
 # changes *which* solutions come back (time_limit, max_solutions) would make
 # two configs solve different problems, so those are named arguments on
 # solve_puzzle instead.
-DEFAULT_CONFIGS = [{"order": "counts"},
-                   {"order": "pockets"},
-                   {"order": "fanout"},
-                   {"order": False},
-                   ]
+DEFAULT_CONFIGS = (
+    {"order": "counts"},
+    {"order": "pockets"},
+    {"order": "fanout"},
+    {"order": False},
+)
 
 ConfigKey = tuple[tuple[str, object], ...]
 
@@ -166,7 +168,7 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> tuple
 
 def run_benchmark(
     puzzle: Puzzle,
-    configs: list[dict] = DEFAULT_CONFIGS,
+    configs: Sequence[dict] = DEFAULT_CONFIGS,
     nr_tests: int = 10,
     T: float = 5.0,
     base_folder: str | Path = BENCHMARK_DIR,
@@ -188,9 +190,7 @@ def run_benchmark(
     # Compile once here, so the trial subprocesses only load the cache.
     puzzle.setup.warmup()
 
-    source = puzzle.source
-    puzzle_dir = Path(base_folder) / source.relative_dir() if source else Path(base_folder) / puzzle.name
-    puzzle_folder = next_free_idx_dir(puzzle_dir, prefix="benchmark")
+    puzzle_folder = next_run_dir(puzzle.source, base_folder, prefix="benchmark")
 
     stats_books: dict[ConfigKey, list[SolveStatsBook]] = {
         config_key(config): [] for config in configs
@@ -203,10 +203,8 @@ def run_benchmark(
 
             for seed in range(nr_tests):
                 solution_book, stats_book = _run_single_test(puzzle, config, seed, T)
-                # flat=False: config/seed folders sit below the puzzle
-                # name here, not directly above an idx, so the usual
-                # puzzle-name-from-folder trick (see saving.save_solution_run)
-                # doesn't apply -- keep puzzle_name explicit in the file.
+                # flat=False: config/seed folders sit below the puzzle's own
+                # folder, so keep puzzle_name explicit in the files.
                 save_solution_run(solution_book, stats_book, config_folder / f"test{seed}", flat=False)
                 stats_books[config_key(config)].append(stats_book)
                 pbar.update(1)
@@ -214,18 +212,19 @@ def run_benchmark(
     return stats_books, puzzle_folder
 
 
-def load_benchmark(folder: str | Path) -> dict[ConfigKey, list[SolveStatsBook]]:
+def load_benchmark(folder: str | Path, game: Game = None) -> dict[ConfigKey, list[SolveStatsBook]]:
     """Reload a benchmark previously written by run_benchmark, without
     re-solving anything. `folder` is the run's own folder -- the one
     directly containing each config's subfolder -- i.e. exactly the path
-    run_benchmark returned. Mirrors serialization.load_solution_run."""
+    run_benchmark returned. `game`, if given, supplies the puzzle (see
+    serialization.load_solution_run)."""
     puzzle_folder = Path(folder)
 
     stats_books: dict[ConfigKey, list[SolveStatsBook]] = {}
     for config_folder in sorted(p for p in puzzle_folder.iterdir() if p.is_dir()):
         test_folders = sorted(config_folder.glob("test*"), key=lambda p: int(p.stem.removeprefix("test")))
         for test_folder in test_folders:
-            _, stats_book = load_solution_run(test_folder)
+            _, stats_book = load_solution_run(test_folder, game)
             stats_books.setdefault(config_key(stats_book.options), []).append(stats_book)
 
     return stats_books

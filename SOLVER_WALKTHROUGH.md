@@ -137,8 +137,8 @@ is no separate resume path that could be wrong.
 solved = all(occ[v] == full[v])
 ```
 
-**Why full board = solved.** `Setup._validate` guarantees the blocks' cells
-exactly tile the board, and pre-placed blocks fill whole placements. So covering
+**Why full board = solved.** `Setup._validate_area` guarantees the blocks' total area
+equals the board's, and pre-placed blocks fill whole placements. So covering
 every cell with distinct unplaced blocks *must* have used all of them — and the
 converse too, which is what makes `branch="block"` terminate: place every block
 and `occ == full` follows. No separate "every block placed" check is needed.
@@ -151,8 +151,8 @@ Otherwise pick an item and list its moves:
 
 ```python
 kind, i = choose_item(...)               # cell or block to branch on -> §5
-if kind == 0: n = collect_cell(t, i, occ, used, st_cands[depth])
-else:         n = collect_block(t, i, occ, used, st_cands[depth])
+if kind == 0: n = collect_cell(t, i, occ, used, nw, st_cands[depth])
+else:         n = collect_block(t, i, occ, used, nw, st_cands[depth])
 rank(...)                                # sort them                  -> §5
 ```
 
@@ -226,18 +226,8 @@ Two MRV scans, each capped at the best count so far, returning `(kind, index)`.
 **Why the two counts are comparable at 1:1.** A child of either kind places
 exactly one block, so an equal candidate count means an equal branching factor
 *and* equal progress. There is no unit mismatch for a weight to correct, which
-is why `"both"` is a plain minimum with no knob. Full enumeration per book, and
-a fixed solution count on the empty boards (time, nodes):
-
-```
-                             both              cell
-IQpuzzler main_puzzles    0.55 / 204833   0.62 /  260916
-IQpuzzler pyramid_puzzles 0.04 /  10568   0.11 /   36916
-PRO main_puzzles          0.07 /  21015   0.07 /   21767
-PRO pyramid_puzzles       0.69 / 233264   0.75 /  264095
-empty_main, 2000 sols     0.49 / 204692   1.67 /  685857
-empty_pyramid, 500 sols   1.59 / 548864  14.35 / 4853760
-```
+is why `"both"` is a plain minimum with no knob. Timings and node counts
+for each mode are in `SOLVER_NOTES.md` §1.
 
 `"block"` alone is the weak one and exists as a baseline: it cannot see an
 uncoverable cell until some block runs out of room, so it prunes almost nothing
@@ -286,8 +276,7 @@ compare equal. That totality is what makes a seeded run reproducible: without
 it, ties would fall out in whatever order the sort happened to leave them.
 
 `rank` returns immediately when `n < 2`. Most nodes have 0 or 1 candidates, so
-ordering is nearly free here — unlike the old `np.lexsort`, which cost 6.7 µs
-per call for a mean of 3 candidates.
+ordering is nearly free.
 
 `cnt`/`stamp` memoise the per-cell counts *within one node*: `stamp[c] ==
 stamp_id` means `cnt[c]` is current. `stamp_id` is `ctl[2]`, which only ever
@@ -303,9 +292,9 @@ increments — it must be unique across the **whole run**, not per call, because
 `Solver` is thin — it owns the objects the kernel cannot see, and the generator
 contract. Nothing else.
 
-1. **Draw priorities.** `_priority`, one per placement: `np.arange` unseeded,
-   `rng.permutation` seeded.
-2. **Resolve `branch` and `order`** into integer rule codes (`_rules`).
+1. **Resolve `branch` and `order`** into integer rule codes (`_resolve_rules`).
+2. **Draw priorities.** A local `priority`, one per placement: `np.arange`
+   unseeded, `rng.permutation` seeded.
 3. **Build the start position** (`_start`). Walk `state.grid` for filled cells
    → `occ0`; mark every already-placed block in `used0`, which is how a
    Puzzle's pre-filled letters are excluded from the search.

@@ -5,7 +5,7 @@ from .setup import Setup
 from .state import State, Puzzle
 from .puzzlebook import PuzzleBook
 from .solver import Solver
-from .solutions import PuzzleInfo, Solution, SolutionBook, SolveStats, SolveStatsBook
+from .solutions import Solution, SolutionBook, SolveStats, SolveStatsBook
 from .game import Game
 from .source import Source
 
@@ -24,8 +24,7 @@ __all__ = [
     "PuzzleBook",
     "Solution",
     "SolutionBook",
-    "PuzzleInfo",
     "SolveStats",
     "SolveStatsBook",
-    "Source"
+    "Source",
 ]

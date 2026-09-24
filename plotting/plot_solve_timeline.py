@@ -1,14 +1,12 @@
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
+from classes import SolutionBook, SolveStatsBook
 from constants import DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
-from classes import SolutionBook
-from serialization import solution_puzzle_info
-from classes import SolveStatsBook
 
-
-def plot_solve_timeline(puzzles, solutions: SolutionBook, stats: SolveStatsBook, ax: plt.Axes = None) -> plt.Axes:
+def plot_solve_timeline(solutions: SolutionBook, stats: SolveStatsBook, ax: plt.Axes = None) -> plt.Axes:
     """Timeline plot: one column per puzzle, y = time (log scale). A thin
     gray horizontal line marks every solution found; the first solution
     for each puzzle is drawn thicker, in the puzzle's difficulty color.
@@ -23,13 +21,12 @@ def plot_solve_timeline(puzzles, solutions: SolutionBook, stats: SolveStatsBook,
     Timing (duration/elapsed) comes from `stats`, the SolveStatsBook
     produced alongside `solutions` by the same solve call -- it's
     solver-run metadata, not part of the solutions themselves.
-    difficulty is the source Puzzle's, not the Solution's own -- see
-    serialization.solution_puzzle_info. `puzzles` is the PuzzleBook `solutions`
-    was solved from when one is in memory; pass None to resolve each from
-    its puzzle's JSON on disk instead.
+    Difficulty is read off each Solution's Puzzle.
     """
+    if not solutions:
+        raise ValueError("plot_solve_timeline needs at least one solved puzzle.")
     solved_puzzles = list(solutions.values())
-    difficulty_by_name = {sol.puzzle_name: solution_puzzle_info(puzzles, sol).difficulty for sol in solved_puzzles}
+    difficulty_by_name = {sol.puzzle_name: sol.puzzle.difficulty for sol in solved_puzzles}
 
     # order columns: group by difficulty (in DIFFICULTY_COLORS order);
     # within a group, preserve the original order the puzzles appear in
@@ -37,7 +34,7 @@ def plot_solve_timeline(puzzles, solutions: SolutionBook, stats: SolveStatsBook,
     # rather than sorting by name -- sorting names as strings would put
     # "10" before "2".
     difficulty_order = {d: i for i, d in enumerate(DIFFICULTY_COLORS)}
-    solved_puzzles.sort(key=lambda sol: difficulty_order.get(difficulty_by_name[sol.puzzle_name], 0))
+    solved_puzzles.sort(key=lambda sol: difficulty_order.get(difficulty_by_name[sol.puzzle_name], len(difficulty_order)))
 
     if ax is None:
         _, ax = plt.subplots(figsize=(0.6 * len(solved_puzzles) + 2, 6))
@@ -72,13 +69,10 @@ def plot_solve_timeline(puzzles, solutions: SolutionBook, stats: SolveStatsBook,
             facecolor=color, edgecolor="none", alpha=0.15, zorder=1,
         ))
 
-        for i, t in enumerate(times):
-            if i == 0:
-                ax.hlines(t, x - col_width / 2, x + col_width / 2,
-                           color=color, linewidth=2.2, zorder=3)
-            else:
-                ax.hlines(t, x - col_width / 2, x + col_width / 2,
-                           color="#BBBBBB", linewidth=0.8, zorder=2)
+        # first solution thick in the puzzle's color, the rest thin gray
+        xmin, xmax = x - col_width / 2, x + col_width / 2
+        ax.hlines(times[1:], xmin, xmax, color="#BBBBBB", linewidth=0.8, zorder=2)
+        ax.hlines(times[:1], xmin, xmax, color=color, linewidth=2.2, zorder=3)
 
     # x ticks: puzzle names, colored by difficulty
     ax.set_xticks(x_positions)
@@ -101,12 +95,12 @@ def plot_solve_timeline(puzzles, solutions: SolutionBook, stats: SolveStatsBook,
     ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.4, zorder=0)
 
     handles = [
-        plt.Line2D([0], [0], color=color, linewidth=2.2, label=difficulty)
+        Line2D([0], [0], color=color, linewidth=2.2, label=difficulty)
         for difficulty, color in DIFFICULTY_COLORS.items()
     ]
     ax.legend(handles=handles, title="Difficulty (1st solution)", frameon=False,
               loc="upper left", bbox_to_anchor=(1.01, 1.0))
 
     ax.set_title("Solve timeline per puzzle", fontsize=12, color="#333333")
-    plt.tight_layout()
+    ax.figure.tight_layout()
     return ax

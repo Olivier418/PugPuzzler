@@ -1,3 +1,4 @@
+# Python >= 3.10 (`X | None` annotations are evaluated at runtime).
 # Core. numba compiles classes/kernel.py, which is the solver's search loop;
 # without it nothing solves. NUMBA_DISABLE_JIT=1 runs that same source as plain
 # Python for debugging, but still needs numba installed for the decorators.
@@ -8,5 +9,5 @@ numba>=0.67
 colorama
 tqdm
 
-# plotting/ only.
-matplotlib
+# plotting/ only (legend_handles needs 3.7+).
+matplotlib>=3.7

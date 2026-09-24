@@ -41,6 +41,40 @@ _CALIB_CHUNK = 4096
 _SOL_CAP = 64
 
 
+def _resolve_rules(seed, time_limit, max_solutions, order, branch):
+    """Validate and resolve the `branch` / `order` options into the
+    integer rule codes the kernel takes."""
+    try:
+        branch_rule = _BRANCH_RULES[branch]
+    except (KeyError, TypeError):
+        raise ValueError(
+            f"branch={branch!r}; expected one of {sorted(_BRANCH_RULES)}."
+        ) from None
+
+    if order is None:
+        order = time_limit < math.inf or max_solutions < math.inf
+
+    if order is True:
+        rank_rule = kernel.RANK_COUNTS
+    elif order is False:
+        # With no ranking at all a seed would be a no-op: the kernel
+        # picks the branch item by an argmin the seed never touches.
+        # Sorting by the drawn priority alone keeps the documented
+        # promise that a seed randomises arrival order, at almost no
+        # cost.
+        rank_rule = kernel.RANK_PRIORITY if seed is not None else kernel.RANK_NONE
+    else:
+        try:
+            rank_rule = _RANK_RULES[order]
+        except (KeyError, TypeError):
+            raise ValueError(
+                f"order={order!r}; expected True, False, or one of "
+                f"{sorted(_RANK_RULES)}."
+            ) from None
+
+    return branch_rule, rank_rule
+
+
 class Solver:
     """Exhaustive exact-cover solver for a State (or Puzzle): every block
     must be placed and every open cell covered exactly once.
@@ -82,15 +116,10 @@ class Solver:
         # The search relies on the unplaced blocks filling the open cells
         # exactly: it calls a node solved the moment every cell is
         # covered, without separately checking that every block went
-        # down. Setup._validate guarantees the equivalence -- block cells
+        # down. Setup._validate_area guarantees the equivalence -- block cells
         # == board cells, and preplaced blocks only ever fill whole
         # placements.
         self.tables, self.block_ids = self.state.setup.kernel_tables
-
-        # Set per solve() call, declared here so the whole attribute
-        # surface is in one place: the tie-break priorities drawn from the
-        # seed.
-        self._priority = None
 
         # Nodes per second, an EMA used to size kernel chunks. It
         # survives across solve() calls on purpose: a chunk boundary
@@ -147,42 +176,9 @@ class Solver:
             )
         return solution
 
-    def _rules(self, seed, time_limit, max_solutions, order, branch):
-        """Validate and resolve the `branch` / `order` options into the
-        integer rule codes the kernel takes."""
-        try:
-            branch_rule = _BRANCH_RULES[branch]
-        except (KeyError, TypeError):
-            raise ValueError(
-                f"branch={branch!r}; expected one of {sorted(_BRANCH_RULES)}."
-            ) from None
-
-        if order is None:
-            order = time_limit < math.inf or max_solutions < math.inf
-
-        if order is True:
-            rank_rule = kernel.RANK_COUNTS
-        elif order is False:
-            # With no ranking at all a seed would be a no-op: the kernel
-            # picks the branch item by an argmin the seed never touches.
-            # Sorting by the drawn priority alone keeps the documented
-            # promise that a seed randomises arrival order, at almost no
-            # cost.
-            rank_rule = kernel.RANK_PRIORITY if seed is not None else kernel.RANK_NONE
-        else:
-            try:
-                rank_rule = _RANK_RULES[order]
-            except (KeyError, TypeError):
-                raise ValueError(
-                    f"order={order!r}; expected True, False, or one of "
-                    f"{sorted(_RANK_RULES)}."
-                ) from None
-
-        return branch_rule, rank_rule
-
     def solve(
         self,
-        seed: int = None,
+        seed: int | None = None,
         time_limit: float = math.inf,
         max_solutions: float = math.inf,
         order=None,
@@ -222,15 +218,7 @@ class Solver:
           main_puzzles/65, 2 s against 0.01 s); on the empty main board
           it finds no solution at all in 30 s, against ~1 ms for "both".
 
-        Full enumeration of each book, and a fixed solution count on the
-        empty boards (time in seconds, then nodes):
-
-            IQpuzzler main_puzzles    both 0.55 / 204833   cell 0.62 /  260916
-            IQpuzzler pyramid_puzzles both 0.04 /  10568   cell 0.11 /   36916
-            PRO main_puzzles          both 0.07 /  21015   cell 0.07 /   21767
-            PRO pyramid_puzzles       both 0.69 / 233264   cell 0.75 /  264095
-            empty_main, 2000 sols     both 0.49 / 204692   cell 1.67 /  685857
-            empty_pyramid, 500 sols   both 1.59 / 548864   cell 14.35 / 4853760
+        Measurements for the three modes are in SOLVER_NOTES.md.
 
         `order` ranks each node's candidate placements. It changes the
         order solutions come out in, never the set. The same rule is
@@ -253,18 +241,20 @@ class Solver:
         - False: table order (but see the seed note above).
         """
         t = self.tables
-        if seed is None:
-            self._priority = np.arange(t.pmask.shape[0], dtype=np.int32)
-        else:
-            rng = np.random.default_rng(seed)
-            self._priority = rng.permutation(t.pmask.shape[0]).astype(np.int32)
-
-        branch_rule, rank_rule = self._rules(
+        branch_rule, rank_rule = _resolve_rules(
             seed, time_limit, max_solutions, order, branch
         )
 
         if max_solutions <= 0 or time_limit <= 0:
             return
+
+        # Local, not on self: two live generators from one Solver must not
+        # share (and overwrite) each other's seeded tie-break order.
+        n_placements = t.pmask.shape[0]
+        if seed is None:
+            priority = np.arange(n_placements, dtype=np.int32)
+        else:
+            priority = np.random.default_rng(seed).permutation(n_placements).astype(np.int32)
 
         deadline = time.perf_counter() + time_limit
         found = 0
@@ -283,7 +273,7 @@ class Solver:
             budget = self._next_budget(remaining)
             t0 = time.perf_counter()
             status, n_sol, nodes = kernel.kernel(
-                t, w, cap, budget, rank_rule, self._priority, branch_rule
+                t, w, cap, budget, rank_rule, priority, branch_rule
             )
             self._observe(nodes, time.perf_counter() - t0)
 

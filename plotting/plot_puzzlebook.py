@@ -2,21 +2,22 @@ from typing import Callable, NamedTuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
-from classes import PuzzleBook, PuzzleInfo, SolutionBook, Solution, SolveStats, SolveStatsBook
+from classes import SolutionBook, Solution, SolveStats, SolveStatsBook
 from constants import DIFFICULTY_COLORS, FRONTIER_COLOR, FRONTIER_DIFFICULTY, UNKNOWN_DIFFICULTY_COLOR
-from serialization import solution_puzzle_info
 
 
 class Metric(NamedTuple):
     """One per-puzzle quantity that can go on an axis. `value` gets the
-    puzzle's Solution, its PuzzleInfo and -- only if `needs_stats` -- its
-    SolveStats (None if that book has no entry for it), and returns a
-    float; nan means "not defined for this puzzle" (e.g. the time to the
-    first solution of an unsolved puzzle) and the puzzle is left out."""
+    puzzle's Solution (its Puzzle is `sol.puzzle`) and -- only if
+    `needs_stats` -- its SolveStats (None if that book has no entry for
+    it), and returns a float; nan means "not defined for this puzzle"
+    (e.g. the time to the first solution of an unsolved puzzle) and the
+    puzzle is left out."""
     label: str
-    value: Callable[[Solution, PuzzleInfo, SolveStats | None], float]
+    value: Callable[[Solution, SolveStats | None], float]
     log: bool = False
     needs_stats: bool = False
 
@@ -27,16 +28,16 @@ def _solution_time(stats: SolveStats | None, i: int) -> float:
 
 
 METRICS: dict[str, Metric] = {
-    "nr_empty_spaces": Metric("Empty spaces in puzzle", lambda sol, info, stats: info.nr_empty_spaces),
-    "nr_solutions": Metric("Number of solutions", lambda sol, info, stats: len(sol.grids), log=True),
+    "nr_empty_spaces": Metric("Empty spaces in puzzle", lambda sol, stats: sol.puzzle.nr_empty_spaces),
+    "nr_solutions": Metric("Number of solutions", lambda sol, stats: len(sol.grids), log=True),
     "time_to_first_solution": Metric(
-        "Time to first solution (s)", lambda sol, info, stats: _solution_time(stats, 0),
+        "Time to first solution (s)", lambda sol, stats: _solution_time(stats, 0),
         log=True, needs_stats=True),
     "time_to_last_solution": Metric(
-        "Time to last solution (s)", lambda sol, info, stats: _solution_time(stats, -1),
+        "Time to last solution (s)", lambda sol, stats: _solution_time(stats, -1),
         log=True, needs_stats=True),
     "solve_time": Metric(
-        "Solve time (s)", lambda sol, info, stats: stats.duration if stats is not None else np.nan,
+        "Solve time (s)", lambda sol, stats: stats.duration if stats is not None else np.nan,
         log=True, needs_stats=True),
 }
 
@@ -54,11 +55,11 @@ def _color(difficulty: str | None, frontier_difficulty: str | None) -> str:
     return DIFFICULTY_COLORS.get(difficulty, UNKNOWN_DIFFICULTY_COLOR)
 
 
-def _legend_entries(infos: list[PuzzleInfo], frontier_difficulty: str | None) -> dict[str, str]:
-    """difficulty -> color for the difficulties present in `infos`: the
-    game's own tiers in DIFFICULTY_COLORS order, then `frontier_difficulty`.
-    Puzzles without a difficulty (e.g. the empty boards) get no entry."""
-    present = {info.difficulty for info in infos}
+def _legend_entries(difficulties: list[str | None], frontier_difficulty: str | None) -> dict[str, str]:
+    """difficulty -> color for the `difficulties` present: the game's own
+    tiers in DIFFICULTY_COLORS order, then `frontier_difficulty`. Puzzles
+    without a difficulty (e.g. the empty boards) get no entry."""
+    present = set(difficulties)
     entries = {d: c for d, c in DIFFICULTY_COLORS.items() if d in present}
     if frontier_difficulty in present:
         entries[frontier_difficulty] = FRONTIER_COLOR
@@ -91,7 +92,6 @@ def _style_3d(ax: plt.Axes) -> None:
 
 
 def plot_puzzlebook(
-    puzzles: PuzzleBook | None,
     solutions: SolutionBook,
     stats: SolveStatsBook = None,
     x: str | Metric | None = None,
@@ -112,11 +112,7 @@ def plot_puzzlebook(
     left out. A 3D axis can't be log-scaled, so there the values are
     log10'd and the ticks labeled as powers of ten instead.
 
-    difficulty/empty-cell count are the source Puzzle's, not the
-    Solution's own -- see serialization.solution_puzzle_info. `puzzles` is
-    the PuzzleBook `solutions` was solved from when one is in memory (as
-    most_difficult_puzzles' own (puzzles, solutions, stats) return is);
-    pass None to resolve each from its puzzle's JSON on disk instead.
+    Difficulty and empty-cell count are read off each Solution's Puzzle.
     Timing metrics need `stats`, the SolveStatsBook produced alongside
     `solutions` by the same solve call.
 
@@ -154,10 +150,10 @@ def plot_puzzlebook(
         raise ValueError("A timing metric needs `stats`, the SolveStatsBook solved alongside `solutions`.")
 
     sols = list(solutions.values())
-    infos = [solution_puzzle_info(puzzles, sol) for sol in sols]
+    difficulties = [sol.puzzle.difficulty for sol in sols]
     columns = [
-        np.array([m.value(sol, info, stats.get(sol.puzzle_name) if stats is not None else None)
-                  for sol, info in zip(sols, infos)], dtype=float)
+        np.array([m.value(sol, stats.get(sol.puzzle_name) if stats is not None else None)
+                  for sol in sols], dtype=float)
         for m in metrics
     ]
 
@@ -171,7 +167,7 @@ def plot_puzzlebook(
     # one dot per distinct (point, color), listing the puzzles on it
     groups: dict[tuple, list[str]] = {}
     for i in np.flatnonzero(keep):
-        key = (*(column[i] for column in columns), _color(infos[i].difficulty, frontier_difficulty))
+        key = (*(column[i] for column in columns), _color(difficulties[i], frontier_difficulty))
         groups.setdefault(key, []).append(sols[i].puzzle_name)
     labels = [_group_label(names) for names in groups.values()]
     colors = [key[-1] for key in groups]
@@ -221,8 +217,8 @@ def plot_puzzlebook(
     handles = list(existing.legend_handles) if existing is not None else []
     seen = {handle.get_label() for handle in handles}
     handles += [
-        plt.Line2D([0], [0], marker="o", linestyle="", color=color, label=difficulty, markersize=8)
-        for difficulty, color in _legend_entries(infos, frontier_difficulty).items()
+        Line2D([0], [0], marker="o", linestyle="", color=color, label=difficulty, markersize=8)
+        for difficulty, color in _legend_entries(difficulties, frontier_difficulty).items()
         if difficulty not in seen
     ]
     if handles:

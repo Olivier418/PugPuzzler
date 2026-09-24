@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+from classes import Puzzle
 from constants import EMPTY, GAMES_DIR, UNPLACED
 from serialization import load_game
 
@@ -44,3 +45,19 @@ def assert_valid_solution(test, puzzle, state):
     # the puzzle's pre-filled cells are untouched
     given = puzzle.grid != EMPTY
     test.assertTrue((state.grid[given] == puzzle.grid[given]).all(), "pre-filled cells changed")
+
+
+def unsolvable_puzzle(game) -> Puzzle:
+    """Every piece is placed except F (3 cells) and H (5 cells); the 8 empty
+    cells (blank below) form a 3x3 block whose top-middle cell is taken by D,
+    i.e. a "U" opening upwards. F fits inside it, and so does H, but never
+    both at once."""
+    setup = game.books["main_puzzles"]["1"].setup
+    letters = [
+        "E", "E", "G", "G", "G", "J", "J", "J", "J", "I", "I",
+        "A", "E", "E", "E", "G", "C", "D", "D", "D", "D", "I",
+        "A", "A", "A", "L", "G", "C", " ", "D", " ", "I", "I",
+        "B", "B", "L", "L", "L", "C", " ", " ", " ", "K", "K",
+        "B", "B", "B", "L", "C", "C", " ", " ", " ", "K", "K",
+    ]
+    return Puzzle(setup, np.array(letters).reshape(5, 11), name="unsolvable")

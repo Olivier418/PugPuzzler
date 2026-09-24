@@ -1,5 +1,4 @@
-from ._utils import _assert_unique, _shared
-from .blocks import BlockCollection
+from ._utils import _assert_unique
 from .puzzlebook import PuzzleBook
 from .setup import Setup
 from .state import Puzzle
@@ -7,7 +6,6 @@ from .state import Puzzle
 
 class Game:
     """Container for a game package, holding puzzle books, standalone loose
-
     puzzles, and board setups.
     """
 

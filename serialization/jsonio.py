@@ -1,11 +1,14 @@
 """JSON helpers shared by the puzzle/solution readers and writers: a pretty
 printer that lays out letter grids one row per line, and the conversion
 between a letter grid (rows of single-character cells) and the row strings
-it is stored as on disk."""
+it is stored as on disk, both for plain letters and for grids of block
+indices."""
 import json
 from pathlib import Path
 
 import numpy as np
+
+from constants import OUTSIDE_BOARD
 
 
 def parse_letter_grid(raw) -> np.ndarray:
@@ -24,6 +27,26 @@ def letter_grid_to_rows(arr: np.ndarray) -> list:
     def join(a):
         return ["".join(row) for row in a] if a.ndim == 2 else [join(x) for x in a]
     return join(np.asarray(arr).T)
+
+
+def block_grid_to_rows(grid: np.ndarray, blocks) -> list:
+    """A full board-shaped grid of block indices as letter rows: each
+    block's cells become its letter, everything else (empty, or outside
+    the board) a space. `blocks` is an idx -> Block mapping."""
+    letters = np.full(grid.shape, " ", dtype="<U1")
+    for idx, block in blocks.items():
+        letters[grid == idx] = block.letter
+    return letter_grid_to_rows(letters)
+
+
+def rows_to_block_grid(rows: list, blocks) -> np.ndarray:
+    """Inverse of block_grid_to_rows for a fully solved grid: letters ->
+    block indices, spaces -> OUTSIDE_BOARD."""
+    letters = parse_letter_grid(rows).T
+    grid = np.full(letters.shape, OUTSIDE_BOARD, dtype=int)
+    for idx, block in blocks.items():
+        grid[letters == block.letter] = idx
+    return grid
 
 
 def _format(obj, indent: int, col: int) -> str:

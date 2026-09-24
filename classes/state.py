@@ -25,7 +25,7 @@ class State:
         self.name: str | None = None
 
         self.grid = self._fresh_grid()
-        self.chosen_placement_idx = {idx: UNPLACED for idx in self.blocks.keys()}
+        self.chosen_placement_idx = self._fresh_placements()
 
     # board/blocks/placements are read through the shared setup rather than
     # duplicated as separate attributes, so there is exactly one place
@@ -42,12 +42,19 @@ class State:
     def placement_cells(self) -> dict:
         return self.setup.placement_cells
 
+    @property
+    def nr_empty_spaces(self) -> int:
+        return int((self.grid == EMPTY).sum())
+
     def _fresh_grid(self) -> np.ndarray:
         """An empty grid: EMPTY on every one of the board's real cells.
         Compact -- shape (n_cells,) -- no OUTSIDE_BOARD cells are stored
         internally at all; those only reappear when expanding back to the
         full board shape (rendering, disk I/O)."""
         return np.full(self.setup.n_cells, EMPTY)
+
+    def _fresh_placements(self) -> dict:
+        return {idx: UNPLACED for idx in self.blocks}
 
     def place(self, block_idx: int, placement_idx: int):
         """Place a block on the grid at the specified placement index."""
@@ -85,7 +92,7 @@ class State:
 
     def clear(self):
         self.grid = self._fresh_grid()
-        self.chosen_placement_idx = {idx: UNPLACED for idx in self.blocks}
+        self.chosen_placement_idx = self._fresh_placements()
 
     def copy(self, rename=None):
         # setup (board, blocks, placements) is immutable and shared by every
@@ -101,7 +108,7 @@ class State:
 
     def solve(
         self,
-        seed: int = None,
+        seed: int | None = None,
         time_limit: float = math.inf,
         max_solutions: float = math.inf,
         **options,

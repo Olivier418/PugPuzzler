@@ -74,14 +74,13 @@ def plot_benchmark(
             # N(t) counts solutions found *up to and including* t, so the
             # i-th solution (0-based) takes the curve to i+1, and the curve
             # sits at 0 until the first one -- hence the explicit (0, 0)
-            # anchor and the 1-based counts. Getting this off by one is
-            # what used to make the plot open at -1 solutions.
+            # anchor and the 1-based counts.
             step_x = np.concatenate(([0.0], times, [duration]))
             step_y = np.concatenate(([0.0], np.arange(1, times.size + 1), [times.size]))
             ax.step(step_x, step_y, where='post', color=c, alpha=0.15)
 
-            # side='right' already yields "number of solution times <= t",
-            # which is N(t) itself; the old -1 here was the actual bug.
+            # side='right' yields "number of solution times <= t", which is
+            # N(t) itself.
             grid_counts.append(np.searchsorted(times, time_grid, side='right'))
             fit_runs.append((times, duration))
 
