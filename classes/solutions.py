@@ -14,12 +14,17 @@ class SolveStats(NamedTuple):
     options+seed were used is a property of the run, not of the
     solutions. `options` is whatever keyword arguments the solver was
     given besides the seed (`branch`, `order`; kept so runs of different
-    solver variants can be told apart and compared by benchmark.py)."""
+    solver variants can be told apart and compared by benchmark.py).
+
+    `complete` says whether the run found every solution: True if the
+    search ran to the end, False if `time_limit`/`max_solutions` cut it
+    short, None if not recorded (runs saved before it was)."""
     puzzle_name: str
     options: dict
     seed: int | None
     duration: float
-    elapsed: list[float]  # per-solution elapsed time, same order/index as the matching Solution.grids (if kept)
+    elapsed: list[float]  # per-solution elapsed time, same order/index as the matching Solution.rows (if kept)
+    complete: bool | None = None
 
 
 def _book_name(book_name: str | None, puzzle_names) -> str | None:
@@ -34,19 +39,32 @@ def _book_name(book_name: str | None, puzzle_names) -> str | None:
 
 
 class Solution:
-    """One Puzzle's solutions: the Puzzle itself plus every grid that
-    solves it (full board-shaped, see Setup.to_full_grid).
+    """One Puzzle's solutions: the Puzzle itself plus every solution as a
+    row -- the placement index of every block, in the Setup's block order
+    (see Solver.solve_rows), the solver's own form and ~20x smaller than a
+    grid. Grids exist only at the edges: `grids` builds them on demand
+    (full board-shaped, see Setup.rows_to_grids), solutions.json stores
+    them as letters, and printing renders them.
 
     The Puzzle is always live -- the one solving.py solved, or the one
     serialization.load_run found in games/ -- so everything
-    about it (name, difficulty, empty spaces, Setup) is read off it rather
+    about it (name, difficulty, filled cells, Setup) is read off it rather
     than copied here, where it could drift.
 
     Producing one (solving + saving) lives in `solving.py`."""
 
-    def __init__(self, puzzle: Puzzle, grids: list[np.ndarray]):
+    def __init__(self, puzzle: Puzzle, rows: np.ndarray):
         self.puzzle = puzzle
-        self.grids = grids
+        self.rows = np.asarray(rows).reshape(-1, len(puzzle.blocks))
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    @property
+    def grids(self) -> np.ndarray:
+        """Every solution as a full board-shaped grid, (k, *board shape) --
+        built on each access, at ~550 bytes a grid."""
+        return self.setup.rows_to_grids(self.rows)
 
     @property
     def puzzle_name(self) -> str:
@@ -57,16 +75,17 @@ class Solution:
         return self.puzzle.setup
 
     def to_states(self) -> list[State]:
-        """The solved grids as States on the puzzle's Setup."""
+        """The solutions as fully placed States on the puzzle's Setup."""
         states = []
-        for grid in self.grids:
+        for row in self.rows:
             state = State(self.setup)
-            state.grid = self.setup.to_compact_grid(grid)
+            for idx, placement_idx in zip(self.setup.blocks, row):
+                state.place_unchecked(idx, int(placement_idx))
             states.append(state)
         return states
 
     def __repr__(self) -> str:
-        if not self.grids:
+        if not len(self):
             return f"Solution to puzzle {self.puzzle_name} (no results)"
         return "\n\n".join(
             self.setup.render(state.grid, header=f"Solution {i} to puzzle {self.puzzle_name}")

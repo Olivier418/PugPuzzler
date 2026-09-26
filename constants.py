@@ -14,11 +14,22 @@ DIFFICULTY_COLORS = {
 UNKNOWN_DIFFICULTY_COLOR = "#999999"  # puzzles without a "difficulty" (e.g. the empty boards)
 # The colors for master and wizard are actually swapped in the original IQpuzzler game
 
-# most_difficult_puzzle.py tags the puzzles it finds with FRONTIER_DIFFICULTY,
-# and plotting.plot_puzzlebook colors that tag with FRONTIER_COLOR -- both kept
-# out of DIFFICULTY_COLORS since it isn't one of the game's own difficulty tiers.
-FRONTIER_DIFFICULTY = "inhuman"
-FRONTIER_COLOR = "#000000"
+# puzzle_bounds.py tags the puzzles it finds with HARDEST_DIFFICULTY (the lower
+# bound: fewest solutions for their filled-cell count) and EASIEST_DIFFICULTY
+# (the upper bound: most), and plotting.plot_puzzle_stats colors those tags
+# from BOUND_COLORS -- kept out of DIFFICULTY_COLORS since they aren't the
+# game's own difficulty tiers. plotting.plot_bounds shades everything outside
+# the bounds in OUT_OF_BOUNDS_COLOR.
+HARDEST_DIFFICULTY = "hardest"
+EASIEST_DIFFICULTY = "easiest"
+# The names of the two bound books (the same on every board).
+LOWER_BOUND_BOOK = "lower_bound"
+UPPER_BOUND_BOOK = "upper_bound"
+BOUND_COLORS = {
+    HARDEST_DIFFICULTY: "#000000",
+    EASIEST_DIFFICULTY: "#7FD1C7",
+}
+OUT_OF_BOUNDS_COLOR = "#E6E6E6"
 
 # One color per solver config in plotting.plot_benchmark, handed
 # out in the order the configs are plotted (and cycled if there are more).
@@ -26,4 +37,5 @@ CONFIG_PALETTE = ["#4FA3D1", "#F76773", "#FFDD87", "#CCD88B"]
 
 SOLUTION_DIR = Path("solutions")
 BENCHMARK_DIR = Path("benchmarks")
+BOUNDS_DIR = Path("bounds")  # per board: its solution bounds, see puzzle_bounds.py
 GAMES_DIR = Path("games")

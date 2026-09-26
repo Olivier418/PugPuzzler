@@ -136,13 +136,11 @@ def load_game(dir_path: Path | str) -> Game:
 
 
 def save_puzzlebook(book: PuzzleBook, game: Game, games_root: Path | str = GAMES_DIR) -> Path:
-    """Give a book made in memory (e.g. by most_difficult_puzzles) a home
+    """Give a book made in memory (e.g. by compute_puzzle_bounds) a home
     in `game`: write it to games/<game>/books/<book.name>.json, set its
     Source and add it to `game.books` -- after which it is solved, saved
     and loaded back like any other book. Never overwrites a book."""
-    board_key = next((key for key, setup in game.setups.items() if setup is book.setup), None)
-    if board_key is None:
-        raise ValueError(f"Book {book.name!r} isn't built on one of game {game.name!r}'s Setups.")
+    board_key = game.board_key(book.setup)
     json_file = Path(games_root) / game.name / "books" / f"{book.name}.json"
     if json_file.exists() or book.name in game.books:
         raise FileExistsError(f"Game {game.name!r} already has a book {book.name!r} ({json_file}).")

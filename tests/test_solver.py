@@ -28,7 +28,10 @@ def known_puzzles(puzzle, solutions) -> list[Puzzle]:
 
 def known_solutions(puzzle, solutions) -> list[Solution]:
     """The literal solutions as Solution objects built in code."""
-    return [Solution(puzzle, [puzzle.setup.to_full_grid(k.grid)]) for k in known_puzzles(puzzle, solutions)]
+    return [
+        Solution(puzzle, [[k.chosen_placement_idx[idx] for idx in puzzle.blocks]])
+        for k in known_puzzles(puzzle, solutions)
+    ]
 
 
 def solver_grids(puzzle) -> set:
@@ -149,3 +152,32 @@ class TestLimits(unittest.TestCase):
         self.assertEqual(len(list(self.empty.solve(seed=0, max_solutions=2))), 2)
         solution, _ = solve_puzzle(self.empty, seed=0, max_solutions=2)
         self.assertEqual(len(solution.grids), 2)
+
+
+class TestRows(unittest.TestCase):
+    """solve_rows is solve() without the States: the same solutions in the
+    same order, every block's placement in each row, pre-placed ones
+    included."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.game = load("IQpuzzler")
+
+    def test_rows_are_solve_s_solutions(self):
+        for book, name in [("main_puzzles", "40"), ("main_puzzles", "50"), ("main_puzzles", "60"),
+                           ("pyramid_puzzles", "80"), ("pyramid_puzzles", "85"), ("pyramid_puzzles", "90")]:
+            with self.subTest(book=book, puzzle=name):
+                puzzle = self.game.books[book][name]
+                states = list(puzzle.solve())
+                rows = np.array(list(puzzle.solve_rows()))
+                self.assertEqual(len(rows), len(states))
+                for state, row, grid in zip(states, rows, puzzle.setup.rows_to_grids(rows)):
+                    self.assertEqual(state.chosen_placement_idx, dict(zip(puzzle.blocks, row.tolist())))
+                    expected = puzzle.setup.to_full_grid(state.grid)
+                    self.assertEqual(grid.dtype, expected.dtype)
+                    self.assertTrue(np.array_equal(grid, expected))
+
+    def test_max_solutions_is_exact(self):
+        empty = self.game.puzzles["empty_main"]
+        for n in (0, 1, 5, 100):
+            self.assertEqual(len(list(empty.solve_rows(max_solutions=n))), n)

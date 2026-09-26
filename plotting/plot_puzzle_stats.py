@@ -7,7 +7,7 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 from classes import Puzzle, SolveStats, SolveStatsBook
-from constants import DIFFICULTY_COLORS, FRONTIER_COLOR, FRONTIER_DIFFICULTY, UNKNOWN_DIFFICULTY_COLOR
+from constants import BOUND_COLORS, DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 
 class Metric(NamedTuple):
@@ -26,7 +26,7 @@ def _solution_time(stats: SolveStats, i: int) -> float:
 
 
 METRICS: dict[str, Metric] = {
-    "nr_empty_spaces": Metric("Empty spaces in puzzle", lambda puzzle, stats: puzzle.nr_empty_spaces),
+    "nr_filled_cells": Metric("Filled cells in puzzle", lambda puzzle, stats: puzzle.nr_filled_cells),
     # one elapsed time per solution found, so its length is the solution count
     "nr_solutions": Metric("Number of solutions", lambda puzzle, stats: len(stats.elapsed), log=True),
     "time_to_first_solution": Metric(
@@ -53,21 +53,17 @@ def _group_label(names: list[str], max_names: int = 3) -> str:
     return f"{label}, +{len(names) - max_names}" if len(names) > max_names else label
 
 
-def _color(difficulty: str | None, frontier_difficulty: str | None) -> str:
-    if frontier_difficulty is not None and difficulty == frontier_difficulty:
-        return FRONTIER_COLOR
-    return DIFFICULTY_COLORS.get(difficulty, UNKNOWN_DIFFICULTY_COLOR)
+def _color(difficulty: str | None) -> str:
+    return DIFFICULTY_COLORS.get(difficulty) or BOUND_COLORS.get(difficulty, UNKNOWN_DIFFICULTY_COLOR)
 
 
-def _legend_entries(difficulties: list[str | None], frontier_difficulty: str | None) -> dict[str, str]:
+def _legend_entries(difficulties: list[str | None]) -> dict[str, str]:
     """difficulty -> color for the `difficulties` present: the game's own
-    tiers in DIFFICULTY_COLORS order, then `frontier_difficulty`. Puzzles
-    without a difficulty (e.g. the empty boards) get no entry."""
+    tiers in DIFFICULTY_COLORS order, then the bounds' tags in
+    BOUND_COLORS order. Puzzles without a difficulty (e.g. the empty
+    boards) get no entry."""
     present = set(difficulties)
-    entries = {d: c for d, c in DIFFICULTY_COLORS.items() if d in present}
-    if frontier_difficulty in present:
-        entries[frontier_difficulty] = FRONTIER_COLOR
-    return entries
+    return {d: c for d, c in (DIFFICULTY_COLORS | BOUND_COLORS).items() if d in present}
 
 
 def _resolve(metric: str | Metric) -> Metric:
@@ -95,19 +91,39 @@ def _style_3d(ax: plt.Axes) -> None:
     ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
 
 
-def plot_puzzlebook(
+def format_axes(ax: plt.Axes, metrics) -> None:
+    """Label, scale and style `ax` for `metrics` (x, y[, z]): a log axis for
+    each `log` metric (log10 values with 10^k tick labels in 3D, which can't
+    log-scale), and the minimalist look every plot here shares."""
+    is_3d = len(metrics) == 3
+    axes = [ax.xaxis, ax.yaxis] + ([ax.zaxis] if is_3d else [])
+    for axis, metric in zip(axes, metrics):
+        axis.set_label_text(metric.label)
+        if metric.log and is_3d:
+            axis.set_major_locator(MaxNLocator(integer=True))
+            axis.set_major_formatter(FuncFormatter(lambda v, _: f"$10^{{{v:g}}}$"))
+    if is_3d:
+        _style_3d(ax)
+    else:
+        _style_2d(ax)
+        if metrics[0].log:
+            ax.set_xscale("log")
+        if metrics[1].log:
+            ax.set_yscale("log")
+
+
+def plot_puzzle_stats(
     puzzles: Mapping[str, Puzzle],
     stats: SolveStatsBook,
     x: str | Metric | None = None,
     y: str | Metric | None = None,
     z: str | Metric | None = None,
-    frontier_difficulty: str | None = FRONTIER_DIFFICULTY,
     title: str | None = None,
     ax: plt.Axes = None,
 ) -> plt.Axes:
     """Scatter plot: one dot per puzzle in `stats`, colored by
-    difficulty. `x`, `y` (default `nr_empty_spaces`, `nr_solutions`) and --
-    for a 3D plot -- `z` each name a per-puzzle quantity from METRICS (`nr_empty_spaces`, `nr_solutions`,
+    difficulty. `x`, `y` (default `nr_filled_cells`, `nr_solutions`) and --
+    for a 3D plot -- `z` each name a per-puzzle quantity from METRICS (`nr_filled_cells`, `nr_solutions`,
     `time_to_first_solution`, `time_to_last_solution`, `solve_time`), or
     are a `Metric` of your own.
     Metrics flagged `log` (counts, times) get a log axis, so their values
@@ -116,7 +132,7 @@ def plot_puzzlebook(
     left out. A 3D axis can't be log-scaled, so there the values are
     log10'd and the ticks labeled as powers of ten instead.
 
-    Difficulty and empty-cell count are read off each puzzle, found by
+    Difficulty and filled-cell count are read off each puzzle, found by
     name in `puzzles` (any mapping covering every puzzle in `stats`, e.g.
     the PuzzleBook from load_run or the book that was solved); the solution
     count and timings come from `stats`.
@@ -126,9 +142,9 @@ def plot_puzzlebook(
     hide each other. Near-ties, and ties with an overlaid plot's dots, stay
     as they are.
 
-    `frontier_difficulty` (most_difficult_puzzles' own tag for the puzzles
-    it found) is colored via constants.FRONTIER_COLOR instead of
-    constants.DIFFICULTY_COLORS, since it isn't one of the game's own
+    compute_puzzle_bounds' own tags (HARDEST_DIFFICULTY,
+    EASIEST_DIFFICULTY) are colored from constants.BOUND_COLORS rather
+    than constants.DIFFICULTY_COLORS, since they aren't the game's own
     difficulty tiers.
 
     Pass an existing `ax` to overlay on it rather than starting a fresh
@@ -139,7 +155,7 @@ def plot_puzzlebook(
     rebuilt. A 3D `ax` from elsewhere needs `z`.
     """
     given = [None if m is None else _resolve(m) for m in (x, y, z)]
-    inherited = getattr(ax, "_puzzlebook_metrics", None)
+    inherited = getattr(ax, "_puzzle_stats_metrics", None)
     if inherited is not None:
         if any(g is not None and g != m for g, m in zip(given, inherited + (None,))):
             raise ValueError(
@@ -147,7 +163,7 @@ def plot_puzzlebook(
                 + "; an overlay can't switch axes.")
         metrics = list(inherited)
     else:
-        metrics = [given[0] or METRICS["nr_empty_spaces"], given[1] or METRICS["nr_solutions"]]
+        metrics = [given[0] or METRICS["nr_filled_cells"], given[1] or METRICS["nr_solutions"]]
         if given[2] is not None:
             metrics.append(given[2])
     is_3d = len(metrics) == 3
@@ -167,7 +183,7 @@ def plot_puzzlebook(
     # one dot per distinct (point, color), listing the puzzles on it
     groups: dict[tuple, list[str]] = {}
     for i in np.flatnonzero(keep):
-        key = (*(column[i] for column in columns), _color(difficulties[i], frontier_difficulty))
+        key = (*(column[i] for column in columns), _color(difficulties[i]))
         groups.setdefault(key, []).append(names[i])
     labels = [_group_label(names) for names in groups.values()]
     colors = [key[-1] for key in groups]
@@ -182,7 +198,7 @@ def plot_puzzlebook(
             _, ax = plt.subplots(figsize=(7, 5))
     elif is_3d != hasattr(ax, "zaxis"):
         raise ValueError("`z` needs a 3D `ax` and a 3D `ax` needs `z`.")
-    ax._puzzlebook_metrics = tuple(metrics)
+    ax._puzzle_stats_metrics = tuple(metrics)
 
     if is_3d:
         ax.scatter(*columns, c=colors, s=70, edgecolors="white", linewidths=0.6, depthshade=False)
@@ -194,21 +210,7 @@ def plot_puzzlebook(
             ax.annotate(label, point, textcoords="offset points",
                         xytext=(6, 4), fontsize=8, color="#444444")
 
-    # minimalist styling
-    axes = [ax.xaxis, ax.yaxis] + ([ax.zaxis] if is_3d else [])
-    for axis, metric in zip(axes, metrics):
-        axis.set_label_text(metric.label)
-        if metric.log and is_3d:
-            axis.set_major_locator(MaxNLocator(integer=True))
-            axis.set_major_formatter(FuncFormatter(lambda v, _: f"$10^{{{v:g}}}$"))
-    if is_3d:
-        _style_3d(ax)
-    else:
-        _style_2d(ax)
-        if metrics[0].log:
-            ax.set_xscale("log")
-        if metrics[1].log:
-            ax.set_yscale("log")
+    format_axes(ax, metrics)
 
     # legend: the difficulties present, merged into whatever an overlaid
     # plot already shows. The existing handles/labels live on the Legend
@@ -218,7 +220,7 @@ def plot_puzzlebook(
     seen = {handle.get_label() for handle in handles}
     handles += [
         Line2D([0], [0], marker="o", linestyle="", color=color, label=difficulty, markersize=8)
-        for difficulty, color in _legend_entries(difficulties, frontier_difficulty).items()
+        for difficulty, color in _legend_entries(difficulties).items()
         if difficulty not in seen
     ]
     if handles:

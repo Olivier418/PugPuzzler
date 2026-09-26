@@ -6,7 +6,7 @@ from collections.abc import Mapping
 
 from classes import Puzzle, SolveStatsBook
 from constants import DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
-from .plot_puzzlebook import solved_puzzles
+from .plot_puzzle_stats import solved_puzzles
 
 
 def plot_solve_timeline(puzzles: Mapping[str, Puzzle], stats: SolveStatsBook, ax: plt.Axes = None) -> plt.Axes:
@@ -85,7 +85,7 @@ def plot_solve_timeline(puzzles: Mapping[str, Puzzle], stats: SolveStatsBook, ax
 
     ax.set_xlim(x_positions[0] - 1, x_positions[-1] + 1)
 
-    # minimalist styling, consistent with plot_puzzlebook
+    # minimalist styling, consistent with plot_puzzle_stats
     ax.set_yscale("log")
     ax.set_ylabel("Time to solution (s)")
     ax.spines["top"].set_visible(False)

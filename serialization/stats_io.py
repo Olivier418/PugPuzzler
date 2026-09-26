@@ -9,11 +9,12 @@ from .solutions_io import single_entry
 def write_solve_stats(stats_book: SolveStatsBook, file_path: Path, flat: bool = True) -> None:
     """Mirrors write_solutions: puzzle names are only written for a
     `flat=False` save. The object wrapper stays either way for the sibling
-    `options`/`seed` fields."""
+    `options`/`seed` fields. `complete` is written per puzzle; a file
+    without it (saved before it existed) loads it as None."""
     stats = single_entry(stats_book, flat, "SolveStatsBook")
     data = {"options": stats_book.options, "seed": stats_book.seed}
     if flat:
-        data |= {"duration": stats.duration, "elapsed": stats.elapsed}
+        data |= {"duration": stats.duration, "complete": stats.complete, "elapsed": stats.elapsed}
     else:
         data["puzzles"] = [
             {
@@ -21,6 +22,7 @@ def write_solve_stats(stats_book: SolveStatsBook, file_path: Path, flat: bool = 
                 "options": s.options,
                 "seed": s.seed,
                 "duration": s.duration,
+                "complete": s.complete,
                 "elapsed": s.elapsed,
             }
             for s in stats_book.values()
@@ -44,6 +46,7 @@ def load_solve_stats_book(file_path: Path, flat_name: str, book_name: str = None
                 seed=item.get("seed", book_seed),
                 duration=item["duration"],
                 elapsed=item["elapsed"],
+                complete=item.get("complete"),
             )
             for item in data["puzzles"]
         ]
@@ -55,6 +58,7 @@ def load_solve_stats_book(file_path: Path, flat_name: str, book_name: str = None
                 seed=book_seed,
                 duration=data["duration"],
                 elapsed=data["elapsed"],
+                complete=data.get("complete"),
             )
         ]
 

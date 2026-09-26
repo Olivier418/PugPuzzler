@@ -1,7 +1,8 @@
 from .loading import load_blocks, load_boards, load_setups, load_book, load_game, save_puzzlebook
 from .jsonio import dump_json, parse_letter_grid, letter_grid_to_rows
 from .puzzles_io import load_puzzles, write_puzzles
-from .runs import save_run, load_run
+from .runs import latest_complete_run, load_puzzle_run, load_run, save_run
+from .bounds_io import Bounds, bounds_dir, load_bounds, save_bounds
 
 __all__ = [
     "load_blocks",
@@ -17,4 +18,10 @@ __all__ = [
     "write_puzzles",
     "save_run",
     "load_run",
+    "load_puzzle_run",
+    "latest_complete_run",
+    "Bounds",
+    "bounds_dir",
+    "load_bounds",
+    "save_bounds",
 ]

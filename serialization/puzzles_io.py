@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from classes import Puzzle, Setup
-from .jsonio import block_grid_to_rows, dump_json, parse_letter_grid
+from .jsonio import block_grids_to_rows, dump_json, parse_letter_grid
 
 DEFAULT_BOARD = "main"
 
@@ -53,6 +53,6 @@ def write_puzzles(puzzles: Iterable[Puzzle], board_key: str, json_file: Path | s
         entry = {"name": p.name}
         if p.difficulty is not None:
             entry["difficulty"] = p.difficulty
-        entry["grid"] = block_grid_to_rows(p.setup.to_full_grid(p.grid), p.blocks)
+        entry["grid"] = block_grids_to_rows(p.setup.to_full_grid(p.grid)[None], p.blocks)[0]
         entries.append(entry)
     dump_json({"board": board_key, "puzzles": entries}, json_file)

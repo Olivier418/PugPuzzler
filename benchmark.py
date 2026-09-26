@@ -50,37 +50,58 @@ def config_label(options: dict) -> str:
     return "+".join(parts) if parts else "default"
 
 
+# The worker sends its solution stamps in batches at most this often: one
+# pipe message per solution cost ~20% of the search's throughput.
+_BATCH_SECONDS = 0.01
+
+# How long past T the parent waits for the worker's final batch and "done"
+# before killing it. The worker's own time_limit=T normally ends it a chunk
+# (~2 ms) after T.
+_GRACE_SECONDS = 1.0
+
+
 def _worker(puzzle: Puzzle, config: dict, seed: int, T: float, conn):
     """Runs in a subprocess so a runaway search (e.g. every flag off on a
     puzzle with a huge search space) can be killed on a wall-clock
     deadline -- something a plain generator loop in the main process
     can't do safely.
 
-    Deliberately does NOT time itself or check against T: spawning a
-    subprocess (reimporting numpy/matplotlib/etc. in the fresh
-    interpreter, and unpickling `puzzle`) takes real time that has
-    nothing to do with the solver. The parent owns T and stamps arrival
-    time itself instead; this just sends a "ready" handshake once that
-    startup cost is already behind it (i.e. once this line actually
-    starts running), so the parent knows exactly when to start its
-    clock, then streams solutions as they're found, and gets
-    hard-killed by the parent once T is actually up. The solver is also
-    handed `time_limit=T` (counted from its own first node), so it
-    normally stops by itself with a clean "done" a hair after the parent's
-    deadline; the kill is only the backstop.
-
-    Sends back only an empty tick per solution -- the parent pairs each
-    with its own arrival-time stamp to build the SolveStats. Pickling the
-    grids across the pipe would be billed as search time, for data a
-    benchmark never keeps.
+    Spawning a subprocess (reimporting numpy/matplotlib/etc. in the fresh
+    interpreter, and unpickling `puzzle`) takes real time that has nothing
+    to do with the solver, so the worker only starts its clock once that is
+    behind it: it sends a "ready" handshake, and times every solution from
+    that moment -- the same moment the parent starts its own clock and T.
+    It solves on the fast rows path (Puzzle.solve_rows, as solving.timed_solve
+    does, so benchmark and solve times compare), stamps each solution, and
+    sends the stamps in batches ("solutions", [elapsed, ...]) at most every
+    _BATCH_SECONDS, never the solutions themselves: a benchmark never keeps
+    them, and pickling one message per solution would be billed as search
+    time. It ends with ("done", duration, complete) -- `complete` being
+    whether the search ran to the end (see Solver.solve). The solver is handed
+    `time_limit=T`, so it normally stops by itself a hair after T; the
+    parent's kill is only the backstop.
     """
     try:
         # Numba's cache load is startup cost too; get it behind "ready".
         puzzle.setup.warmup()
         conn.send(("ready", None))
-        for _ in puzzle.solve(seed=seed, time_limit=T, **config):
-            conn.send(("solution", None))
-        conn.send(("done", None))
+        start = last_send = time.perf_counter()
+        batch = []
+        solutions = puzzle.solve_rows(seed=seed, time_limit=T, **config)
+        while True:
+            try:
+                next(solutions)
+            except StopIteration as done:  # a for loop would drop its value
+                complete = done.value
+                break
+            now = time.perf_counter()
+            batch.append(now - start)
+            if now - last_send >= _BATCH_SECONDS:
+                conn.send(("solutions", batch))
+                batch, last_send = [], now
+        duration = time.perf_counter() - start
+        conn.send(("solutions", batch))
+        conn.send(("done", (duration, complete)))
     except Exception as e:
         conn.send(("error", str(e)))
     finally:
@@ -88,11 +109,15 @@ def _worker(puzzle: Puzzle, config: dict, seed: int, T: float, conn):
 
 
 def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> SolveStats:
-    """One (config, seed) trial, capped at T seconds."""
+    """One (config, seed) trial, capped at T seconds. The parent owns the
+    deadline: it starts T at the worker's "ready", keeps only solutions
+    stamped within T, and kills a worker still running _GRACE_SECONDS past
+    it."""
     parent_conn, child_conn = multiprocessing.Pipe()
     process = multiprocessing.Process(target=_worker, args=(puzzle, config, seed, T, child_conn))
 
     elapsed: list[float] = []
+    worker_duration = worker_complete = None
 
     process.start()
     child_conn.close()
@@ -115,49 +140,47 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> Solve
     else:
         setup_error = f"worker did not become ready within {SETUP_TIMEOUT}s"
 
-    # The single authoritative clock, started only once the worker is
-    # actually ready: both the T deadline below and every solution's
-    # elapsed time are measured against this, so they can't drift apart
-    # the way the parent/worker clocks did before.
+    # The parent's clock, started at the same moment as the worker's.
     start_wait = time.perf_counter()
+    deadline = start_wait + T + _GRACE_SECONDS
 
     label = config_label(config)
     if setup_error is not None:
         print(f"\nWorker error in config {label}, seed {seed}: {setup_error}")
     else:
         while True:
-            if not process.is_alive() and not parent_conn.poll():
+            rem_time = deadline - time.perf_counter()
+            if rem_time <= 0 or not parent_conn.poll(rem_time):
                 break
-
-            rem_time = T - (time.perf_counter() - start_wait)
-            if rem_time <= 0:
-                break
-
-            if not parent_conn.poll(rem_time):
-                break
-
             try:
                 status, payload = parent_conn.recv()
-            except EOFError:
+            except EOFError:  # the worker died without saying goodbye
                 break
-
-            if status == "solution":
-                elapsed.append(time.perf_counter() - start_wait)
+            if status == "solutions":
+                elapsed.extend(payload)
             elif status == "done":
+                worker_duration, worker_complete = payload
                 break
             elif status == "error":
                 print(f"\nWorker error in config {label}, seed {seed}: {payload}")
                 break
 
-    duration = time.perf_counter() - start_wait
+    stopped = time.perf_counter() - start_wait
 
     if process.is_alive():
         process.terminate()
         process.join()
     parent_conn.close()
 
+    # The worker's own stop overshoots T by up to a solver chunk; a trial is
+    # exactly T long, and complete only if the search ended within it.
+    complete = bool(worker_complete) and all(e <= T for e in elapsed) and worker_duration <= T
+    elapsed = [e for e in elapsed if e <= T]
+    duration = min(worker_duration if worker_duration is not None else stopped, T)
+
     return SolveStats(
         puzzle_name=puzzle.name, options=dict(config), seed=seed, duration=duration, elapsed=elapsed,
+        complete=complete,
     )
 
 

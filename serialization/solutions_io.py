@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from classes import Puzzle, Solution, SolutionBook
-from .jsonio import block_grid_to_rows, dump_json, rows_to_block_grid
+from .jsonio import block_grids_to_rows, dump_json, rows_to_block_grids
 
 
 def single_entry(book, flat: bool, label: str):
@@ -31,17 +31,27 @@ def write_solutions(solution_book: SolutionBook, file_path: Path, flat: bool = T
     list of `{"puzzle_name", "grids"}` objects."""
     sol = single_entry(solution_book, flat, "SolutionBook")
     if flat:
-        data = _grids_to_rows(sol)
+        data = _letter_grids(sol)
     else:
         data = [
-            {"puzzle_name": sol.puzzle_name, "grids": _grids_to_rows(sol)}
+            {"puzzle_name": sol.puzzle_name, "grids": _letter_grids(sol)}
             for sol in solution_book.values()
         ]
     dump_json(data, file_path)
 
 
-def _grids_to_rows(sol: Solution) -> list:
-    return [block_grid_to_rows(grid, sol.puzzle.blocks) for grid in sol.grids]
+# Solutions are turned into grids this many at a time on the way out, which
+# bounds the memory a huge Solution (millions of rows) needs to be written.
+_CHUNK = 1 << 16
+
+
+def _letter_grids(sol: Solution) -> list:
+    """`sol`'s solutions as letter rows, one entry per solution."""
+    letters = []
+    for start in range(0, len(sol), _CHUNK):
+        grids = sol.setup.rows_to_grids(sol.rows[start:start + _CHUNK])
+        letters += block_grids_to_rows(grids, sol.puzzle.blocks)
+    return letters
 
 
 def load_solutionbook(
@@ -49,7 +59,8 @@ def load_solutionbook(
 ) -> SolutionBook:
     """Inverse of write_solutions: each puzzle's grids attached to its
     Puzzle from `puzzles`; a flat file's belong to `flat_name`. A grid is a
-    list, never a dict, so the first element tells the layouts apart."""
+    list, never a dict, so the first element tells the layouts apart. Every
+    grid is checked to be a solution (see Setup.grids_to_rows)."""
     with open(file_path, "r") as f:
         data = json.load(f)
 
@@ -63,5 +74,6 @@ def load_solutionbook(
         if name not in puzzles:
             raise ValueError(f"{file_path} has solutions for puzzle {name!r}, which games/ doesn't have.")
         puzzle = puzzles[name]
-        solutions.append(Solution(puzzle, [rows_to_block_grid(grid, puzzle.blocks) for grid in rows]))
+        grids = rows_to_block_grids(rows, puzzle.blocks, puzzle.board.cells.shape)
+        solutions.append(Solution(puzzle, puzzle.setup.grids_to_rows(grids)))
     return SolutionBook(*solutions, book_name=book_name)

@@ -43,8 +43,8 @@ class State:
         return self.setup.placement_cells
 
     @property
-    def nr_empty_spaces(self) -> int:
-        return int((self.grid == EMPTY).sum())
+    def nr_filled_cells(self) -> int:
+        return int((self.grid != EMPTY).sum())
 
     def _fresh_grid(self) -> np.ndarray:
         """An empty grid: EMPTY on every one of the board's real cells.
@@ -126,19 +126,43 @@ class State:
 
         `options` (`branch`, `order`) are forwarded to Solver.solve
         as-is; they never change the solution set, only how fast and in
-        what order it arrives."""
-        solver = Solver(self)
-        for sol_idx, sol in enumerate(
-            solver.solve(
-                seed=seed,
-                time_limit=time_limit,
-                max_solutions=max_solutions,
-                **options,
-            )
-        ):
+        what order it arrives. Returns, as the generator's return value,
+        whether the search ran to the end (see Solver.solve)."""
+        solutions = Solver(self).solve(
+            seed=seed,
+            time_limit=time_limit,
+            max_solutions=max_solutions,
+            **options,
+        )
+        nr = 0
+        while True:
+            try:
+                sol = next(solutions)
+            except StopIteration as done:
+                return done.value
+            nr += 1
             if self.name:
-                sol.name = f"{self.name} (solution {sol_idx + 1})"
+                sol.name = f"{self.name} (solution {nr})"
             yield sol
+
+    def solve_rows(
+        self,
+        seed: int | None = None,
+        time_limit: float = math.inf,
+        max_solutions: float = math.inf,
+        **options,
+    ):
+        """solve()'s solutions as bare rows instead of States: one array
+        per solution with every block's placement index, in the Setup's
+        block order (see Solver.solve_rows). The path for counting, timing
+        or tabulating solutions; Setup.rows_to_grids turns rows back into
+        grids. Returns whether the search ran to the end, like solve()."""
+        return (yield from Solver(self).solve_rows(
+            seed=seed,
+            time_limit=time_limit,
+            max_solutions=max_solutions,
+            **options,
+        ))
 
     def _print_header(self) -> str:
         return f"State {self.name}" if self.name else "State"

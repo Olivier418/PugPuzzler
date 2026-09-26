@@ -1,6 +1,8 @@
 """Serialization tests: letter-grid JSON helpers, the run-folder round
 trip and reloading a benchmark. Writes only into a temporary folder, never
 solutions/ or benchmarks/."""
+import contextlib
+import io
 import json
 import shutil
 import tempfile
@@ -11,11 +13,12 @@ import numpy as np
 
 from benchmark import config_key, config_label, load_benchmark
 from classes import PuzzleBook, SolveStats, SolveStatsBook
-from constants import GAMES_DIR, UNPLACED
+from constants import GAMES_DIR, LOWER_BOUND_BOOK, UNPLACED, UPPER_BOUND_BOOK
 from serialization import (
     dump_json, letter_grid_to_rows, load_puzzles, load_run, parse_letter_grid, save_puzzlebook, save_run,
 )
-from serialization.stats_io import write_solve_stats
+from serialization.stats_io import load_solve_stats_book, write_solve_stats
+from serialization import bounds_dir, latest_complete_run, load_bounds, load_puzzle_run, save_bounds
 from solving import single_run_books, solve_puzzle, solve_puzzlebook
 from tests._helpers import load
 
@@ -78,7 +81,7 @@ class TestSolutionRoundTrip(unittest.TestCase):
             with self.subTest(book=book_name, puzzle=name):
                 puzzle = self.game.books[book_name][name]
                 run = single_run_books(*solve_puzzle(puzzle))
-                self.assertTrue(run[0][name].grids)
+                self.assertTrue(len(run[0][name]))
                 with tempfile.TemporaryDirectory() as tmp:
                     folder = Path(tmp) / "IQpuzzler" / "books" / book_name / name / "result_1"
                     save_run(*run, folder)
@@ -168,3 +171,64 @@ class TestBenchmarkLoad(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCompleteRuns(unittest.TestCase):
+    """`complete` survives a run's round trip, and latest_complete_run
+    skips runs cut short by a limit."""
+
+    def test_latest_complete_run(self):
+        puzzle = load("IQpuzzler").books["main_puzzles"]["50"]
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(latest_complete_run(puzzle, tmp))
+            _, cut = solve_puzzle(puzzle, max_solutions=3, save_solutions=True, save_stats=True, solutions_root=tmp)
+            self.assertFalse(cut.complete)
+            self.assertIsNone(latest_complete_run(puzzle, tmp))
+            full_solution, full = solve_puzzle(puzzle, save_solutions=True, save_stats=True, solutions_root=tmp)
+            self.assertTrue(full.complete)
+            solve_puzzle(puzzle, max_solutions=3, save_solutions=True, save_stats=True, solutions_root=tmp)
+            run = latest_complete_run(puzzle, tmp)  # not the newer, cut-short result_3
+            self.assertEqual(run, Path(tmp) / "IQpuzzler" / "books" / "main_puzzles" / "50" / "result_2")
+            solution, stats = load_puzzle_run(run, puzzle)
+            self.assertIs(solution.puzzle, puzzle)
+            self.assertTrue(np.array_equal(solution.rows, full_solution.rows))
+            self.assertEqual(stats, full)
+
+    def test_older_stats_load_as_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "stats.json"
+            file.write_text(json.dumps({"options": {}, "seed": None, "duration": 1.0, "elapsed": [0.5]}))
+            self.assertIsNone(load_solve_stats_book(file, "x")["x"].complete)
+
+
+class TestBoundsFolder(unittest.TestCase):
+    """Both bound books round-trip through a game's bounds folder, which
+    raises on load until all four files are there."""
+
+    def test_bound_books_round_trip(self):
+        game = load("IQpuzzler")
+        source = game.books["main_puzzles"]
+        books = []
+        for name in (LOWER_BOUND_BOOK, UPPER_BOUND_BOOK):
+            puzzles = PuzzleBook(source["40"].copy(rename="1"), source["41"].copy(rename="2"), name=name)
+            stats = SolveStatsBook(
+                SolveStats("1", {}, None, 2.0, [0.5, 1.0, 1.5], complete=True),
+                SolveStats("2", {}, None, 0.5, [0.25], complete=True),
+                book_name=name, options={}, seed=None,
+            )
+            books.append((puzzles, stats))
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(FileNotFoundError):  # nothing there yet
+                load_bounds(game, "main", tmp)
+            folder = save_bounds(game, *books, root=tmp)
+            self.assertEqual(folder, bounds_dir("IQpuzzler", "main", tmp))
+            loaded = load_bounds(game, "main", tmp)
+            for (got_puzzles, got_stats), (puzzles, stats) in zip(loaded, books):
+                self.assertEqual(got_puzzles.name, puzzles.name)
+                self.assertEqual(list(got_puzzles), list(puzzles))
+                for name, puzzle in puzzles.items():
+                    self.assertTrue(np.array_equal(got_puzzles[name].grid, puzzle.grid))
+                self.assertEqual(dict(got_stats), dict(stats))
+            (folder / "upper_stats.json").unlink()
+            with self.assertRaises(FileNotFoundError):
+                load_bounds(game, "main", tmp)

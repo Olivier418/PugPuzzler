@@ -8,8 +8,8 @@ back, a run is three parallel books keyed by puzzle name: the puzzles
 from functools import lru_cache
 from pathlib import Path
 
-from classes import Puzzle, PuzzleBook, Setup, SolutionBook, SolveStatsBook
-from constants import GAMES_DIR
+from classes import Puzzle, PuzzleBook, Setup, Solution, SolutionBook, SolveStats, SolveStatsBook
+from constants import GAMES_DIR, SOLUTION_DIR
 from .loading import load_book, load_setups, load_standalone_puzzles
 from .paths import game_book_from_run_dir, puzzle_name_from_run_dir
 from .solutions_io import load_solutionbook, write_solutions
@@ -94,3 +94,36 @@ def load_run(
         raise ValueError(f"{folder} has results for puzzles {missing}, which {games_root} doesn't have.")
     puzzles = PuzzleBook(*(lookup[name] for name in names), name=book_name or flat_name)
     return puzzles, solution_book, stats_book
+
+
+def load_puzzle_run(folder: str | Path, puzzle: Puzzle) -> tuple[Solution | None, SolveStats | None]:
+    """A single-puzzle run folder of `puzzle` (which must be the puzzle its
+    path names), loaded straight onto it rather than onto a fresh copy
+    from games/: (Solution, SolveStats), either None if not saved."""
+    folder = Path(folder)
+    if puzzle_name_from_run_dir(folder) != puzzle.name:
+        raise ValueError(f"{folder} is a run of {puzzle_name_from_run_dir(folder)!r}, not of {puzzle.name!r}.")
+    solutions_file, stats_file = folder / SOLUTIONS_FILE, folder / STATS_FILE
+    solution = stats = None
+    if solutions_file.exists():
+        solution = load_solutionbook(solutions_file, {puzzle.name: puzzle}, puzzle.name)[puzzle.name]
+    if stats_file.exists():
+        stats = load_solve_stats_book(stats_file, puzzle.name)[puzzle.name]
+    return solution, stats
+
+
+def latest_complete_run(puzzle: Puzzle, root: str | Path = SOLUTION_DIR) -> Path | None:
+    """The newest run folder of `puzzle` under `root` (see
+    paths.next_run_dir) that holds its solutions and whose stats say they
+    are complete -- every solution, not a time- or count-limited subset;
+    None if there is none (or `puzzle` isn't in games/)."""
+    if puzzle.source is None:
+        return None
+    base = Path(root) / puzzle.source.relative_dir()
+    runs = [p for p in base.glob("result_*") if p.name.removeprefix("result_").isdigit()] if base.exists() else []
+    for folder in sorted(runs, key=lambda p: int(p.name.removeprefix("result_")), reverse=True):
+        stats_file = folder / STATS_FILE
+        if (folder / SOLUTIONS_FILE).exists() and stats_file.exists():
+            if load_solve_stats_book(stats_file, puzzle.name)[puzzle.name].complete:
+                return folder
+    return None

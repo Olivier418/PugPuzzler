@@ -300,18 +300,29 @@ contract. Nothing else.
    Puzzle's pre-filled letters are excluded from the search.
 4. **Allocate one `Workspace`** and run the chunking loop below.
 
+Steps 1-4 and the loop live in `_chunks()`, which both public generators share:
+`solve()` turns each path into a `State` (`_emit`), `solve_rows()` into a bare
+row of placement indices (below).
+
 ### The chunking loop
 
 ```python
 while True:
-    if past deadline: return
+    if past deadline: return False
     status, n_sol, nodes = kernel.kernel(t, w, cap, budget, rank_rule, priority, branch_rule)
-    for i in range(n_sol):
-        found += 1
-        yield self._emit(w.sol_buf[i, :w.sol_len[i]].tolist())
-        if found >= max_solutions: return
-    if status == DONE: return
+    if n_sol:
+        take = min(n_sol, max_solutions - found)
+        found += take
+        yield w.sol_buf[:take, :w.sol_len[0]].copy()   # one chunk of gid paths
+        if take < n_sol: return False                  # max_solutions cut it short
+    if status == DONE: return True
+    if found >= max_solutions: return False
 ```
+
+Every solution of a puzzle places the same blocks, so all paths in a chunk have
+the same length. The generator's return value says whether the search ran to
+the end; `solve()` and `solve_rows()` pass it on as their own (through `_each`,
+since a plain `for` loop would drop it), and it becomes `SolveStats.complete`.
 
 **The kernel is never told `max_solutions`.** It gets a buffer cap and a node
 budget; all counting stays in Python. That is what keeps the generator lazy: a
@@ -335,6 +346,17 @@ for gid in path:
 `place_unchecked` writes the grid **and** `chosen_placement_idx` together, so a
 yielded solution can never have one without the other. That is precisely what
 `tests/_helpers.assert_valid_solution` cross-checks.
+
+### `solve_rows()` — gids into rows, no `State`
+
+The same chunks, vectorised per chunk instead of replayed per solution:
+`pos = pblock[chunk]`, and `chunk - block_start[pos]` is written into each row
+at column `pos` (`np.put_along_axis`) on top of a base row holding the
+pre-placed blocks' placements. A row is every block's placement index in
+`block_ids` order. Skipping the `State` is worth ~12% of throughput on a full
+enumeration, which is why everything that only times or counts uses it
+(`solving.timed_solve`, `benchmark.py`); `Setup.rows_to_grids` rebuilds grids
+from rows when they are wanted.
 
 ---
 

@@ -27,6 +27,13 @@ class Game:
         self.puzzles: dict[str, Puzzle] = {p.name: p for p in puzzles}
         self.setups: dict[str, Setup] = setups or {}
 
+    def board_key(self, setup: Setup) -> str:
+        """The key of `setup` in `self.setups` (matched by identity)."""
+        key = next((key for key, s in self.setups.items() if s is setup), None)
+        if key is None:
+            raise ValueError(f"That Setup isn't one of game {self.name!r}'s (it has {sorted(self.setups)}).")
+        return key
+
     def __repr__(self) -> str:
         header = f"Game {self.name}" if self.name else "Game"
         parts = [repr(b) for b in self.books.values()] + [repr(p) for p in self.puzzles.values()]

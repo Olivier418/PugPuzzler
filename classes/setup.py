@@ -3,7 +3,7 @@ from functools import cached_property
 
 import numpy as np
 
-from constants import OUTSIDE_BOARD
+from constants import EMPTY, OUTSIDE_BOARD
 from . import kernel
 from .blocks import Block, BlockCollection
 from .boards import Board
@@ -163,6 +163,54 @@ class Setup:
             cell_coords=self.cell_coords,
             unit_vectors=self.board.lattice.unit_vectors,
         )
+
+    @cached_property
+    def row_dtype(self) -> type:
+        """The smallest dtype that holds every placement index: the dtype
+        solution rows (see Solver.solve_rows) are stored in."""
+        most = max(len(p) for p in self.placement_cells.values())
+        return np.uint16 if most <= np.iinfo(np.uint16).max else np.int32
+
+    def rows_to_grids(self, rows: np.ndarray) -> np.ndarray:
+        """Solution rows (see Solver.solve_rows: one row per solution, every
+        block's placement index in block order) as full board-shaped grids,
+        shape (k, *board shape): exactly what to_full_grid gives for the
+        same solutions' State.grid, dtype included."""
+        rows = np.asarray(rows).reshape(-1, len(self.blocks))
+        k = len(rows)
+        compact = np.full((k, self.n_cells), EMPTY, dtype=np.int64)
+        which = np.arange(k)[:, None]
+        for j, idx in enumerate(self.blocks):
+            compact[which, self.placement_cells[idx][rows[:, j]]] = idx
+        full = np.full((k, self.board.cells.size), OUTSIDE_BOARD, dtype=np.int64)
+        full[:, self.compact_to_flat] = compact
+        return full.reshape(k, *self.board.cells.shape)
+
+    def grids_to_rows(self, grids: np.ndarray) -> np.ndarray:
+        """Inverse of rows_to_grids: full board-shaped grids of block
+        indices, (k, *board shape), as solution rows (k, n_blocks) in
+        `row_dtype`. Raises ValueError unless every grid is a solution:
+        each block covering exactly the cells of one of its placements."""
+        grids = np.asarray(grids).reshape(-1, *self.board.cells.shape)
+        k = len(grids)
+        compact = grids.reshape(k, -1)[:, self.compact_to_flat]
+        rows = np.empty((k, len(self.blocks)), dtype=self.row_dtype)
+        for j, (idx, block) in enumerate(self.blocks.items()):
+            # np.nonzero walks row-major, so each solution's cells come out
+            # together and ascending: one (k, size) array
+            which, cells = np.nonzero(compact == idx)
+            if not np.array_equal(np.bincount(which, minlength=k), np.full(k, block.count)):
+                raise ValueError(f"Block {block.letter} doesn't cover exactly {block.count} cells in every grid.")
+            # a placement is identified by its sorted cells, as one integer
+            dims = (self.n_cells,) * block.count
+            keys = np.ravel_multi_index(cells.reshape(k, block.count).T, dims)
+            placement_keys = np.ravel_multi_index(np.sort(self.placement_cells[idx], axis=1).T, dims)
+            order = np.argsort(placement_keys)
+            pos = np.searchsorted(placement_keys, keys, sorter=order).clip(max=len(order) - 1)
+            if not np.array_equal(placement_keys[order[pos]], keys):
+                raise ValueError(f"Block {block.letter} isn't on one of its placements in every grid.")
+            rows[:, j] = order[pos]
+        return rows
 
     def warmup(self):
         """Get everything a first solve would pay for up front: build

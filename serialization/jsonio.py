@@ -3,12 +3,14 @@ printer that lays out letter grids one row per line, and the conversion
 between a letter grid (rows of single-character cells) and the row strings
 it is stored as on disk, both for plain letters and for grids of block
 indices."""
+import itertools
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 
-from constants import OUTSIDE_BOARD
+from constants import EMPTY, OUTSIDE_BOARD
 
 
 def parse_letter_grid(raw) -> np.ndarray:
@@ -29,24 +31,48 @@ def letter_grid_to_rows(arr: np.ndarray) -> list:
     return join(np.asarray(arr).T)
 
 
-def block_grid_to_rows(grid: np.ndarray, blocks) -> list:
-    """A full board-shaped grid of block indices as letter rows: each
-    block's cells become its letter, everything else (empty, or outside
-    the board) a space. `blocks` is an idx -> Block mapping."""
-    letters = np.full(grid.shape, " ", dtype="<U1")
+def block_grids_to_rows(grids: np.ndarray, blocks) -> list:
+    """Full board-shaped grids of block indices, (k, *board shape), as
+    letter rows, one entry per grid: each block's cells become its letter,
+    everything else (empty, or outside the board) a space. `blocks` is an
+    idx -> Block mapping. One vectorised pass, however many grids."""
+    grids = np.asarray(grids)
+    offset = -min(EMPTY, OUTSIDE_BOARD)  # grid values start at the sentinels
+    lut = np.full(max(blocks) + offset + 1, ord(" "), dtype=np.uint8)
     for idx, block in blocks.items():
-        letters[grid == idx] = block.letter
-    return letter_grid_to_rows(letters)
+        lut[idx + offset] = ord(block.letter)
+    letters = lut[grids + offset]
+    # to the written orientation: (k, [height,] depth, width)
+    written = np.ascontiguousarray(letters.transpose(0, *range(letters.ndim - 1, 0, -1)))
+    _, *outer, width = written.shape
+    text = written.tobytes().decode("ascii")
+    rows = [text[i:i + width] for i in range(0, len(text), width)]
+    for n in reversed(outer):  # rows into layers, layers into grids
+        rows = [rows[i:i + n] for i in range(0, len(rows), n)]
+    return rows
 
 
-def rows_to_block_grid(rows: list, blocks) -> np.ndarray:
-    """Inverse of block_grid_to_rows for a fully solved grid: letters ->
-    block indices, spaces -> OUTSIDE_BOARD."""
-    letters = parse_letter_grid(rows).T
-    grid = np.full(letters.shape, OUTSIDE_BOARD, dtype=int)
+def rows_to_block_grids(entries: list, blocks, shape: tuple) -> np.ndarray:
+    """Inverse of block_grids_to_rows for fully solved grids: a list of
+    letter-row entries (each shaped like a board of internal `shape`) ->
+    one (k, *shape) array of block indices, spaces -> OUTSIDE_BOARD. Raises
+    ValueError on an entry of the wrong size or an unknown letter."""
+    strings = entries
+    for _ in shape:  # a grid nests one level per axis: rows, [layers,] grids
+        strings = itertools.chain.from_iterable(strings)
+    codes = np.frombuffer("".join(strings).encode("ascii"), dtype=np.uint8)
+    if codes.size != len(entries) * math.prod(shape):
+        raise ValueError(f"Not every grid has the board's {math.prod(shape)} cells.")
+    dtype = np.int8 if max(blocks) < np.iinfo(np.int8).max else np.int16
+    unknown = np.iinfo(dtype).min
+    lut = np.full(256, unknown, dtype=dtype)
+    lut[ord(" ")] = OUTSIDE_BOARD
     for idx, block in blocks.items():
-        grid[letters == block.letter] = idx
-    return grid
+        lut[ord(block.letter)] = idx
+    written = lut[codes].reshape(len(entries), *reversed(shape))
+    if (written == unknown).any():
+        raise ValueError("A grid holds a letter that is no block's.")
+    return written.transpose(0, *range(len(shape), 0, -1))
 
 
 def _format(obj, indent: int, col: int) -> str:

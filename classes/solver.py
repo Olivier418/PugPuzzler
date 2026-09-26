@@ -75,6 +75,19 @@ def _resolve_rules(seed, time_limit, max_solutions, order, branch):
     return branch_rule, rank_rule
 
 
+def _each(chunks, convert):
+    """Everything `convert` makes of each chunk `chunks` yields -- and, as
+    this generator's own return value, whatever `chunks` returns (for
+    Solver._chunks: whether the search ran to the end), which a plain
+    `for` loop would drop."""
+    while True:
+        try:
+            chunk = next(chunks)
+        except StopIteration as done:
+            return done.value
+        yield from convert(chunk)
+
+
 class Solver:
     """Exhaustive exact-cover solver for a State (or Puzzle): every block
     must be placed and every open cell covered exactly once.
@@ -185,7 +198,10 @@ class Solver:
         branch: str = "both",
     ):
         """Yield every solution as a fully placed copy of the state, or --
-        if a limit is hit first -- just the ones found by then.
+        if a limit is hit first -- just the ones found by then. The
+        generator's return value (what `yield from` evaluates to, or
+        StopIteration.value) says which: True if the search ran to the end,
+        so every solution was yielded; False if a limit cut it short.
 
         `time_limit` (seconds, counted from the first `next()`) and
         `max_solutions` both default to infinity; the search stops as soon
@@ -240,13 +256,55 @@ class Solver:
         - "fanout": fewest options left for the next empty cell.
         - False: table order (but see the seed note above).
         """
+        return (yield from _each(
+            self._chunks(seed, time_limit, max_solutions, order, branch),
+            lambda chunk: map(self._emit, chunk.tolist()),
+        ))
+
+    def solve_rows(
+        self,
+        seed: int | None = None,
+        time_limit: float = math.inf,
+        max_solutions: float = math.inf,
+        order=None,
+        branch: str = "both",
+    ):
+        """solve()'s solutions, in the same order, as bare rows instead of
+        States: one int64 array per solution holding the placement index of
+        every block -- pre-placed ones included -- in `block_ids` order
+        (= the Setup's block order). No State is built, so this is the path
+        for anything that only counts, times or tabulates solutions;
+        Setup.rows_to_grids turns rows back into grids. Same arguments and
+        return value as solve()."""
+        t = self.tables
+        # The pre-placed blocks' columns never change; a searched path
+        # fills in the rest.
+        chosen = self.state.chosen_placement_idx
+        base = np.array([chosen[idx] for idx in self.block_ids], dtype=np.int64)
+
+        def rows(chunk):
+            pos = t.pblock[chunk]
+            out = np.repeat(base[None, :], len(chunk), axis=0)
+            np.put_along_axis(out, pos, chunk - t.block_start[pos], axis=1)
+            return out
+
+        return (yield from _each(self._chunks(seed, time_limit, max_solutions, order, branch), rows))
+
+    def _chunks(self, seed, time_limit, max_solutions, order, branch):
+        """The search itself, shared by solve() and solve_rows(): yields
+        each kernel return's solutions as a (k, n_searched) int array of
+        global placement ids, trimmed so no more than `max_solutions` are
+        ever yielded in total. Every solution of a puzzle places the same
+        blocks, so all paths have the same length. Returns True if the
+        search ran to the end (every solution was yielded), False if a
+        limit cut it short."""
         t = self.tables
         branch_rule, rank_rule = _resolve_rules(
             seed, time_limit, max_solutions, order, branch
         )
 
         if max_solutions <= 0 or time_limit <= 0:
-            return
+            return False
 
         # Local, not on self: two live generators from one Solver must not
         # share (and overwrite) each other's seeded tie-break order.
@@ -269,7 +327,7 @@ class Solver:
         while True:
             remaining = deadline - time.perf_counter()
             if remaining <= 0:
-                return
+                return False
             budget = self._next_budget(remaining)
             t0 = time.perf_counter()
             status, n_sol, nodes = kernel.kernel(
@@ -277,10 +335,13 @@ class Solver:
             )
             self._observe(nodes, time.perf_counter() - t0)
 
-            for i in range(n_sol):
-                found += 1
-                yield self._emit(w.sol_buf[i, :w.sol_len[i]].tolist())
-                if found >= max_solutions:
-                    return
+            if n_sol:
+                take = int(min(n_sol, max_solutions - found))
+                found += take
+                yield w.sol_buf[:take, :w.sol_len[0]].copy()
+                if take < n_sol:  # max_solutions cut this batch short
+                    return False
             if status == kernel.DONE:
-                return
+                return True
+            if found >= max_solutions:
+                return False
