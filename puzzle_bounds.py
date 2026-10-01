@@ -40,14 +40,13 @@ import math
 import numpy as np
 from tqdm import tqdm
 
-from classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats, SolveStatsBook
+from classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats
 from constants import EASIEST_DIFFICULTY, HARDEST_DIFFICULTY, LOWER_BOUND_BOOK, UPPER_BOUND_BOOK
 from serialization import Bounds
 from solving import timed_solve
 
 # filled count -> (nr_solutions, realization); a realization is
-# {column: placement_idx}, a column being a block's position in the Setup's
-# block order (the table's columns).
+# {block idx: placement_idx}, a block's idx being its column in the table.
 Bound = dict[int, tuple[int, dict[int, int]]]
 
 
@@ -165,34 +164,33 @@ def bound_counts(
 def _bound_puzzles(setup: Setup, bound: Bound, name: str, difficulty: str) -> PuzzleBook:
     """The puzzles of `bound`, named 1, 2, 3, ... by increasing filled count
     and tagged `difficulty`."""
-    block_idxs = list(setup.blocks)
     puzzles = []
     for i, filled in enumerate(sorted(bound), start=1):
         puzzle = Puzzle(setup, name=str(i), difficulty=difficulty)
-        for col, placement_idx in bound[filled][1].items():
-            puzzle.place_unchecked(block_idxs[col], placement_idx)
+        for block_idx, placement_idx in bound[filled][1].items():
+            puzzle.place_unchecked(block_idx, placement_idx)
         puzzles.append(puzzle)
     return PuzzleBook(*puzzles, name=name)
 
 
 def _time_bound_book(
-    puzzles: PuzzleBook, empty_stats: SolveStats, verbose: bool, expected: list[int] | None = None
-) -> SolveStatsBook:
-    """The SolveStats of a bound book's puzzles: the empty board's (the
+    puzzles: PuzzleBook, empty_stats: SolveStats, verbose: bool, expected: list[int]
+) -> dict[str, SolveStats]:
+    """The SolveStats of a bound book's puzzles, by name: the empty board's (the
     first) is `empty_stats`, every other one is solved here, and checked
-    against its `expected` solution count if given (it can only differ if
-    the empty board's run isn't truly complete)."""
+    against its `expected` solution count (it can only differ if the empty
+    board's run isn't truly complete)."""
     empty, *rest = puzzles.values()
     stats = [empty_stats._replace(puzzle_name=empty.name)]
     for i, puzzle in enumerate(tqdm(rest, desc=f"Timing {puzzles.name}", disable=not verbose), start=1):
         _, puzzle_stats = timed_solve(puzzle, keep_rows=False)
-        if expected is not None and len(puzzle_stats.elapsed) != expected[i]:
+        if len(puzzle_stats.elapsed) != expected[i]:
             raise RuntimeError(
                 f"Puzzle {puzzle.name} of {puzzles.name} has {len(puzzle_stats.elapsed)} solutions, but the "
                 f"empty board's run says {expected[i]}: is that run really complete?"
             )
         stats.append(puzzle_stats)
-    return SolveStatsBook(*stats, book_name=puzzles.name, options={}, seed=None)
+    return {s.puzzle_name: s for s in stats}
 
 
 def compute_puzzle_bounds(empty_solution: Solution, empty_stats: SolveStats, verbose: bool = True) -> Bounds:
@@ -205,8 +203,8 @@ def compute_puzzle_bounds(empty_solution: Solution, empty_stats: SolveStats, ver
     finished one.
 
     `empty_solution`/`empty_stats` are a complete solve of an empty puzzle
-    (e.g. solving.empty_puzzle's), solved now with solving.solve_puzzle or
-    loaded with serialization.load_puzzle_run -- ~15 min to solve for
+    (e.g. game.puzzles["empty_main"]), solved now with solving.solve_puzzle or
+    loaded with serialization.load_complete_run -- ~15 min to solve for
     IQpuzzlerPRO main, so save it. The board is the one that puzzle is on.
 
     Returns ((lower_puzzles, lower_stats), (upper_puzzles, upper_stats)):
@@ -214,10 +212,10 @@ def compute_puzzle_bounds(empty_solution: Solution, empty_stats: SolveStats, ver
     with their puzzles named 1, 2, 3, ... by increasing filled count and
     tagged constants.HARDEST_DIFFICULTY / EASIEST_DIFFICULTY (colored by
     plotting.plot_puzzle_stats via constants.BOUND_COLORS), and each book's
-    SolveStatsBook, puzzle 1's being `empty_stats`. plotting.plot_bounds
-    draws them as a band. No SolutionBooks: the empty board and the
-    low-filled upper bounds have far too many solutions for that; solve a
-    book with solving.solve_puzzlebook if its solutions are wanted.
+    stats by puzzle name, puzzle 1's being `empty_stats`. plotting.plot_bounds
+    draws them as a band. No solutions: the empty board and the low-filled
+    upper bounds have far too many for that; solve a book with
+    solving.solve_puzzlebook if its solutions are wanted.
 
     Always computes -- the grouping (minutes at most), then one timed solve
     per bound puzzle, dominated by the upper book's low-filled puzzles.
@@ -228,17 +226,16 @@ def compute_puzzle_bounds(empty_solution: Solution, empty_stats: SolveStats, ver
         raise ValueError(f"Puzzle {empty.name} isn't empty: it has {empty.nr_filled_cells} filled cells.")
     if empty_stats.puzzle_name != empty_solution.puzzle_name:
         raise ValueError(f"The stats are of {empty_stats.puzzle_name}, the solutions of {empty_solution.puzzle_name}.")
-    if empty_stats.complete is not True:
-        raise ValueError(f"The solve of {empty.name} isn't known to be complete, so it may miss solutions.")
+    if not empty_stats.complete:
+        raise ValueError(f"The solve of {empty.name} was cut short, so it may miss solutions.")
     if not len(empty_solution):
         raise ValueError("The empty board has no solutions, so no puzzle on this board does.")
 
     setup = empty_solution.setup
-    block_idxs = list(setup.blocks)
     counts = bound_counts(
         empty_solution.rows,
-        [len(setup.placement_cells[idx]) for idx in block_idxs],
-        [setup.blocks[idx].count for idx in block_idxs],
+        [len(placements) for placements in setup.placement_cells],
+        [block.count for block in setup.blocks.values()],
         verbose=verbose,
     )
     bounds = []

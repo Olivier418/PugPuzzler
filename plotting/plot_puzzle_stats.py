@@ -6,7 +6,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
-from classes import Puzzle, SolveStats, SolveStatsBook
+from classes import Puzzle, SolveStats
 from constants import BOUND_COLORS, DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 
@@ -37,9 +37,9 @@ METRICS: dict[str, Metric] = {
 }
 
 
-def solved_puzzles(puzzles: Mapping[str, Puzzle], stats: SolveStatsBook) -> list[Puzzle]:
+def solved_puzzles(puzzles: Mapping[str, Puzzle], stats: Mapping[str, SolveStats]) -> list[Puzzle]:
     """The Puzzle behind each entry of `stats`, in its order, looked up by
-    name in `puzzles` (a run's PuzzleBook from load_run, a game's book, ...)."""
+    name in `puzzles` (a run's PuzzleBook from load_run_books, a game's book, ...)."""
     missing = [name for name in stats if name not in puzzles]
     if missing:
         raise ValueError(f"`puzzles` has no puzzle named {missing} (all of `stats` must be covered).")
@@ -53,11 +53,11 @@ def _group_label(names: list[str], max_names: int = 3) -> str:
     return f"{label}, +{len(names) - max_names}" if len(names) > max_names else label
 
 
-def _color(difficulty: str | None) -> str:
+def difficulty_color(difficulty: str | None) -> str:
     return DIFFICULTY_COLORS.get(difficulty) or BOUND_COLORS.get(difficulty, UNKNOWN_DIFFICULTY_COLOR)
 
 
-def _legend_entries(difficulties: list[str | None]) -> dict[str, str]:
+def legend_entries(difficulties: list[str | None]) -> dict[str, str]:
     """difficulty -> color for the `difficulties` present: the game's own
     tiers in DIFFICULTY_COLORS order, then the bounds' tags in
     BOUND_COLORS order. Puzzles without a difficulty (e.g. the empty
@@ -74,7 +74,7 @@ def _resolve(metric: str | Metric) -> Metric:
     return METRICS[metric]
 
 
-def _style_2d(ax: plt.Axes) -> None:
+def style_2d(ax: plt.Axes) -> None:
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_color("#CCCCCC")
@@ -105,7 +105,7 @@ def format_axes(ax: plt.Axes, metrics) -> None:
     if is_3d:
         _style_3d(ax)
     else:
-        _style_2d(ax)
+        style_2d(ax)
         if metrics[0].log:
             ax.set_xscale("log")
         if metrics[1].log:
@@ -114,7 +114,7 @@ def format_axes(ax: plt.Axes, metrics) -> None:
 
 def plot_puzzle_stats(
     puzzles: Mapping[str, Puzzle],
-    stats: SolveStatsBook,
+    stats: Mapping[str, SolveStats],
     x: str | Metric | None = None,
     y: str | Metric | None = None,
     z: str | Metric | None = None,
@@ -134,7 +134,7 @@ def plot_puzzle_stats(
 
     Difficulty and filled-cell count are read off each puzzle, found by
     name in `puzzles` (any mapping covering every puzzle in `stats`, e.g.
-    the PuzzleBook from load_run or the book that was solved); the solution
+    the PuzzleBook from load_run_books or the book that was solved); the solution
     count and timings come from `stats`.
 
     Puzzles that land on the same point (same values, same color) are
@@ -183,7 +183,7 @@ def plot_puzzle_stats(
     # one dot per distinct (point, color), listing the puzzles on it
     groups: dict[tuple, list[str]] = {}
     for i in np.flatnonzero(keep):
-        key = (*(column[i] for column in columns), _color(difficulties[i]))
+        key = (*(column[i] for column in columns), difficulty_color(difficulties[i]))
         groups.setdefault(key, []).append(names[i])
     labels = [_group_label(names) for names in groups.values()]
     colors = [key[-1] for key in groups]
@@ -220,7 +220,7 @@ def plot_puzzle_stats(
     seen = {handle.get_label() for handle in handles}
     handles += [
         Line2D([0], [0], marker="o", linestyle="", color=color, label=difficulty, markersize=8)
-        for difficulty, color in _legend_entries(difficulties).items()
+        for difficulty, color in legend_entries(difficulties).items()
         if difficulty not in seen
     ]
     if handles:

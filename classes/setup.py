@@ -39,24 +39,22 @@ class Setup:
 
         # Placements are computed as flat indices into the full board
         # shape and re-based into compact space once here, so every other
-        # consumer (State.grid, Solver) only ever deals with the dense
-        # range.
-        self.placement_cells = {
-            idx: self.flat_to_compact[flat]
-            for idx, flat in self._compute_placement_indices().items()
-        }
-        self._validate_placements()
+        # consumer (Puzzle.grid, the solver) only ever deals with the dense
+        # range. One (N, block size) array per block, in block order.
+        self.placement_cells = [self.flat_to_compact[flat] for flat in self._compute_placement_indices()]
 
     def _valid_orientations(self, block: Block) -> list[np.ndarray]:
         k = block.ndim
 
-        G_board2 = self.board.lattice.gram2
-        G_piece2 = block.lattice.gram2
+        G_board2 = self.board.gram2
+        # A block's own coordinates are always on an orthogonal grid, whose
+        # doubled Gram matrix is 2I (see Board.gram2).
+        G_piece2 = 2 * np.eye(k, dtype=int)
 
         # 1. All unit vectors in board space, i.e. v^T @ (2G) @ v == 2.
-        # Cached on the board's lattice, so this is computed once per board
-        # and reused across every block, rather than recomputed each time.
-        candidate_vecs = self.board.lattice.unit_vectors
+        # Cached on the board, so this is computed once per board and
+        # reused across every block, rather than recomputed each time.
+        candidate_vecs = self.board.unit_vectors
 
         # 2. Find valid transformation matrices M composed of orthogonal unit vectors
         unique_shapes = []
@@ -79,13 +77,13 @@ class Setup:
 
         return unique_shapes
 
-    def _compute_placement_indices(self):
-        result = {}
+    def _compute_placement_indices(self) -> list[np.ndarray]:
+        result = []
         cells = self.board.cells
-        board_shape = self.board.shape
-        ndim = self.board.ndim
+        board_shape = cells.shape
+        ndim = cells.ndim
 
-        for block_idx, block in self.blocks.items():
+        for block in self.blocks.values():
             shapes = self._valid_orientations(block)
             result_chunks = []
 
@@ -109,11 +107,9 @@ class Setup:
                     flat = np.ravel_multi_index(flat_idx_tuple, board_shape)
                     result_chunks.append(flat)
 
-            result[block_idx] = (
-                np.concatenate(result_chunks, axis=0)
-                if result_chunks
-                else np.empty((0, block.count), dtype=np.int64)
-            )
+            if not result_chunks:
+                raise ValueError(f"Block {block.letter} has no valid placements on the board.")
+            result.append(np.concatenate(result_chunks, axis=0))
         return result
 
     def _validate_area(self):
@@ -125,63 +121,38 @@ class Setup:
                 f"Total block cells ({total_cells}) do not match board cells ({board_cells})."
             )
 
-    def _validate_placements(self):
-        for idx, placements in self.placement_cells.items():
-            if len(placements) == 0:
-                raise ValueError(f"Block {idx} has no valid placements on the board.")
-
     # ---- derived tables -------------------------------------------------
     # Lazily built and then shared by reference across every Puzzle in a
     # book, exactly like placement_cells above. A Setup that is only ever
     # printed pays for none of it.
 
     @cached_property
-    def cell_coords(self) -> np.ndarray:
-        """(n_cells, ndim) coordinates of every compact cell, i.e. the
-        compact index -> board position map. Its one consumer is
-        kernel_tables below, which derives cell adjacency from it for the
-        solver's "pockets" ranking rule."""
-        return np.stack(
-            np.unravel_index(self.compact_to_flat, self.board.cells.shape), axis=1
-        )
-
-    @cached_property
-    def kernel_tables(self) -> tuple:
-        """`(kernel.Tables, block_ids)`: everything the search needs that
-        depends on the board and blocks alone, and nothing that depends on
-        which cells a particular puzzle starts with. ~70 KB, ~7 ms to
-        build -- and a book is 72 puzzles on one Setup, so caching it here
-        rather than per puzzle is worth ~2x on a whole-book solve.
-
-        Lives on the Setup for the same reason placement_cells does: it is
-        derived, immutable data *about this setup*. The search's mutable
-        state (kernel.Workspace) deliberately does not -- that is
-        allocated per kernel entry, which is what makes a reused Solver
-        reproducible."""
-        return kernel.build_tables(
-            self.placement_cells, self.n_cells,
-            cell_coords=self.cell_coords,
-            unit_vectors=self.board.lattice.unit_vectors,
-        )
+    def kernel_tables(self) -> kernel.Tables:
+        """Everything the search needs that depends on the board and blocks
+        alone, and nothing that depends on which cells a particular puzzle
+        starts with. ~70 KB, ~7 ms to build -- and a book is 72 puzzles on
+        one Setup, so caching it here rather than per puzzle is worth ~2x on
+        a whole-book solve."""
+        return kernel.build_tables(self.placement_cells, self.n_cells)
 
     @cached_property
     def row_dtype(self) -> type:
         """The smallest dtype that holds every placement index: the dtype
-        solution rows (see Solver.solve_rows) are stored in."""
-        most = max(len(p) for p in self.placement_cells.values())
+        solution rows (see solver.solve_rows) are stored in."""
+        most = max(len(p) for p in self.placement_cells)
         return np.uint16 if most <= np.iinfo(np.uint16).max else np.int32
 
     def rows_to_grids(self, rows: np.ndarray) -> np.ndarray:
-        """Solution rows (see Solver.solve_rows: one row per solution, every
+        """Solution rows (see solver.solve_rows: one row per solution, every
         block's placement index in block order) as full board-shaped grids,
         shape (k, *board shape): exactly what to_full_grid gives for the
-        same solutions' State.grid, dtype included."""
+        same solutions' Puzzle.grid, dtype included."""
         rows = np.asarray(rows).reshape(-1, len(self.blocks))
         k = len(rows)
         compact = np.full((k, self.n_cells), EMPTY, dtype=np.int64)
         which = np.arange(k)[:, None]
-        for j, idx in enumerate(self.blocks):
-            compact[which, self.placement_cells[idx][rows[:, j]]] = idx
+        for idx in self.blocks:
+            compact[which, self.placement_cells[idx][rows[:, idx]]] = idx
         full = np.full((k, self.board.cells.size), OUTSIDE_BOARD, dtype=np.int64)
         full[:, self.compact_to_flat] = compact
         return full.reshape(k, *self.board.cells.shape)
@@ -195,7 +166,7 @@ class Setup:
         k = len(grids)
         compact = grids.reshape(k, -1)[:, self.compact_to_flat]
         rows = np.empty((k, len(self.blocks)), dtype=self.row_dtype)
-        for j, (idx, block) in enumerate(self.blocks.items()):
+        for idx, block in self.blocks.items():
             # np.nonzero walks row-major, so each solution's cells come out
             # together and ascending: one (k, size) array
             which, cells = np.nonzero(compact == idx)
@@ -209,7 +180,7 @@ class Setup:
             pos = np.searchsorted(placement_keys, keys, sorter=order).clip(max=len(order) - 1)
             if not np.array_equal(placement_keys[order[pos]], keys):
                 raise ValueError(f"Block {block.letter} isn't on one of its placements in every grid.")
-            rows[:, j] = order[pos]
+            rows[:, idx] = order[pos]
         return rows
 
     def warmup(self):
@@ -217,7 +188,7 @@ class Setup:
         kernel_tables and load the compiled kernel (see kernel.warmup).
         Call before starting a timer. The JIT part is per process, not
         per Setup, so repeat calls on any Setup are free."""
-        kernel.warmup(self.kernel_tables[0])
+        kernel.warmup(self.kernel_tables)
 
     def render(self, grid: np.ndarray, header: str = None, leftover_idcs=None) -> str:
         """Build the text representation used by every __repr__ in this
@@ -242,8 +213,3 @@ class Setup:
         full = np.full(self.board.cells.size, OUTSIDE_BOARD, dtype=grid.dtype)
         full[self.compact_to_flat] = grid
         return full.reshape(self.board.cells.shape)
-
-    def to_compact_grid(self, full_grid: np.ndarray) -> np.ndarray:
-        """Inverse of to_full_grid(): pull a full board-shaped grid (e.g. read
-        from disk, or a JSON letter_grid) down to compact space."""
-        return full_grid.ravel()[self.compact_to_flat]

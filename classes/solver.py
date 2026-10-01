@@ -1,33 +1,21 @@
-from __future__ import annotations
-
+"""The Python side of the search: solve_rows drives the compiled kernel
+(classes.kernel) over a Puzzle and yields its solutions as rows. It owns
+what the kernel cannot see -- the Puzzle, the options, the clock and the
+lazy generator contract -- and is otherwise thin."""
 import math
 import time
-from typing import TYPE_CHECKING
 
 import numpy as np
 
 from constants import EMPTY, UNPLACED
 from . import kernel
 
-if TYPE_CHECKING:
-    # Only for the type hints below -- never imported at runtime, so this
-    # doesn't create a circular import with state.py (which imports
-    # Solver at the top of the file).
-    from .state import State
 
-
-# branch= accepts these names; see Solver.solve.
+# branch= accepts these names; see solve_rows.
 _BRANCH_RULES = {
     "both": kernel.BRANCH_BOTH,
     "cell": kernel.BRANCH_CELL,
     "block": kernel.BRANCH_BLOCK,
-}
-
-# order= accepts these names as well as True/False; see Solver.solve.
-_RANK_RULES = {
-    "counts": kernel.RANK_COUNTS,
-    "pockets": kernel.RANK_POCKETS,
-    "fanout": kernel.RANK_FANOUT,
 }
 
 # Kernel chunking. The kernel runs until it has `cap` solutions or has
@@ -64,284 +52,152 @@ def _resolve_rules(seed, time_limit, max_solutions, order, branch):
         # cost.
         rank_rule = kernel.RANK_PRIORITY if seed is not None else kernel.RANK_NONE
     else:
-        try:
-            rank_rule = _RANK_RULES[order]
-        except (KeyError, TypeError):
-            raise ValueError(
-                f"order={order!r}; expected True, False, or one of "
-                f"{sorted(_RANK_RULES)}."
-            ) from None
+        raise ValueError(f"order={order!r}; expected True, False or None.")
 
     return branch_rule, rank_rule
 
 
-def _each(chunks, convert):
-    """Everything `convert` makes of each chunk `chunks` yields -- and, as
-    this generator's own return value, whatever `chunks` returns (for
-    Solver._chunks: whether the search ran to the end), which a plain
-    `for` loop would drop."""
-    while True:
-        try:
-            chunk = next(chunks)
-        except StopIteration as done:
-            return done.value
-        yield from convert(chunk)
+def _start(puzzle, t: kernel.Tables):
+    """The puzzle's starting position as the kernel sees it: `(occ, used)`.
+    Pre-placed blocks (the letters of a Puzzle's starting grid) are fixed,
+    and excluded from the search by marking them used."""
+    occ = np.zeros(t.full.size, dtype=np.uint64)
+    for c in np.flatnonzero(puzzle.grid != EMPTY):
+        occ[c >> 6] |= kernel.BIT[c & 63]
+
+    used = np.uint64(0)
+    for idx, placement_idx in puzzle.chosen_placement_idx.items():
+        if placement_idx != UNPLACED:
+            used |= kernel.BIT[idx]
+    return occ, used
 
 
-class Solver:
-    """Exhaustive exact-cover solver for a State (or Puzzle): every block
-    must be placed and every open cell covered exactly once.
+def solve_rows(
+    puzzle,
+    seed: int | None = None,
+    time_limit: float = math.inf,
+    max_solutions: float = math.inf,
+    order: bool | None = None,
+    branch: str = "both",
+):
+    """Yield every solution of `puzzle` (exhaustive exact cover: every block
+    placed, every open cell covered exactly once) as a row: one int64 array
+    holding the placement index of every block -- pre-placed ones included
+    -- in block order. Setup.rows_to_grids turns rows into grids,
+    Puzzle.solved_copy into a Puzzle.
 
-    The search itself lives in classes.kernel, compiled by numba: the
-    board's occupancy is a bitmask, so "does this placement fit" is one
-    AND, and a node costs a few hundred integer operations rather than a
-    dozen NumPy calls over conflict lists. This class owns everything the
-    kernel cannot -- the Setup/State objects and the lazy generator
-    contract -- and is otherwise thin: it sets up the starting position,
-    then feeds the kernel node budgets until it is done.
+    Stops early once a limit is hit. The generator's return value
+    (what `yield from` evaluates to, or StopIteration.value) says
+    whether it did: True if the search ran to the end, so every
+    solution was yielded; False if a limit cut it short. This is what
+    becomes SolveStats.complete.
 
-    **Laziness.** The kernel is never told `max_solutions`; it gets a
-    solution-buffer cap and a node budget, returns FULL/BUDGET/DONE, and
-    is re-entered with its stack intact. An EMA of nodes/s sizes ~2 ms
+    `time_limit` (seconds, counted from the first `next()`) and
+    `max_solutions` both default to infinity; the search stops as soon
+    as either is reached. The kernel is never told `max_solutions`: it
+    gets a solution-buffer cap and a node budget, returns FULL/BUDGET/DONE,
+    and is re-entered with its stack intact. An EMA of nodes/s sizes ~2 ms
     chunks, which is how `time_limit` stays exact to ~2 ms and how the
     generator stays abandonable mid-tree.
 
-    Only reads State's public surface (setup, grid, chosen_placement_idx,
-    placement_cells, place_unchecked(), copy()) -- no knowledge of
-    Puzzle's letter-grid loading or any other subclass-specific
-    behaviour is required.
+    `seed` randomises the order solutions are found in without
+    changing the set: it draws one random priority per placement,
+    used only to break ties the search's own ordering leaves open.
+    Unseeded, ties fall to placement index order. Nothing is ever
+    reordered or shared, so a seed can't disturb anything indexed by
+    placement.
+
+    Every node branches on one *item* and tries every placement that
+    settles it, so the branches partition the node's solutions:
+    nothing is missed and nothing is found twice. `branch` picks which
+    kind of item, and only affects speed:
+
+    - "both" (the default): whichever of the two below has fewer live
+      placements at this node. The counts are directly comparable --
+      a child of either kind places exactly one block -- so this is
+      simply better informed than either alone, and it wins or ties
+      everywhere.
+    - "cell": always the empty cell with the fewest live placements.
+    - "block": always the unplaced block with the fewest. Sound, and
+      a useful baseline, but much the weakest: it cannot notice a
+      cell that nothing can cover until some block runs out of room,
+      so it prunes almost nothing where little is pre-filled. On a
+      book puzzle that costs a factor (worst measured:
+      main_puzzles/65, 2 s against 0.01 s); on the empty main board
+      it finds no solution at all in 30 s, against ~1 ms for "both".
+
+    Measurements for the three modes are in SOLVER_NOTES.md.
+
+    `order` ranks each node's candidate placements. It changes the
+    order solutions come out in, never the set. The rank is a property
+    of a placement rather than of the item that was branched on, so
+    ordering is uniform across all three `branch` modes by
+    construction.
+
+    - True: each candidate's cells' live-placement counts, sorted
+      ascending and compared like a tuple, so a placement covering the
+      scarcest cells goes first.
+    - False: table order (but see the seed note above).
+    - None (the default): True exactly when a limit is set, which is
+      when it can pay -- a full enumeration visits the same nodes
+      whatever order siblings are tried in, so there it is pure
+      overhead.
     """
+    branch_rule, rank_rule = _resolve_rules(seed, time_limit, max_solutions, order, branch)
+    if max_solutions <= 0 or time_limit <= 0:
+        return False
 
-    def __init__(self, state: "State"):
-        # A private working copy: it stays at the puzzle's starting
-        # position (the search carries its own path and only materialises
-        # a State when it reaches a solution), and there's no reason the
-        # caller's own state should be tied to any of it. state.copy() is
-        # cheap -- setup (board/blocks/placements) is shared by reference,
-        # only the small per-instance grid + chosen_placement_idx dict are
-        # copied.
-        self.state = state.copy()
+    # Built once per Setup and shared by every search on it.
+    t = puzzle.setup.kernel_tables
+    n_placements = t.pmask.shape[0]
+    if seed is None:
+        priority = np.arange(n_placements, dtype=np.int32)
+    else:
+        priority = np.random.default_rng(seed).permutation(n_placements).astype(np.int32)
 
-        # Built once per Setup and shared by every Solver on it -- a whole
-        # book is one board and one block collection. See
-        # Setup.kernel_tables.
-        #
-        # The search relies on the unplaced blocks filling the open cells
-        # exactly: it calls a node solved the moment every cell is
-        # covered, without separately checking that every block went
-        # down. Setup._validate_area guarantees the equivalence -- block cells
-        # == board cells, and preplaced blocks only ever fill whole
-        # placements.
-        self.tables, self.block_ids = self.state.setup.kernel_tables
+    # Every solution row starts as this one: the pre-placed blocks'
+    # columns never change, and a searched path fills in the rest.
+    base = np.array(list(puzzle.chosen_placement_idx.values()), dtype=np.int64)
 
-        # Nodes per second, an EMA used to size kernel chunks. It
-        # survives across solve() calls on purpose: a chunk boundary
-        # changes only *where the kernel returns*, never the order in
-        # which it visits nodes, so carrying it cannot affect output.
-        self._rate = None
+    # The kernel is never told max_solutions -- it gets a per-call
+    # buffer cap and a node budget, and all the counting stays here.
+    cap = _SOL_CAP
+    if max_solutions < math.inf:
+        cap = int(min(_SOL_CAP, math.ceil(max_solutions)))
+    w = kernel.make_workspace(t, *_start(puzzle, t), cap=cap)
 
-    # ---- chunk sizing ---------------------------------------------------
-
-    def _next_budget(self, remaining: float) -> int:
-        if self._rate is None:
-            return _CALIB_CHUNK
-        want = self._rate * min(_CHUNK_SECONDS, max(remaining, 0.0))
-        return int(min(max(want, _MIN_CHUNK), _MAX_CHUNK))
-
-    def _observe(self, nodes: int, elapsed: float):
-        if elapsed <= 0 or nodes <= 0:
-            return
-        rate = nodes / elapsed
-        self._rate = rate if self._rate is None else 0.7 * self._rate + 0.3 * rate
-
-    # ---- the starting position ------------------------------------------
-
-    def _start(self):
-        """The puzzle's starting position as the kernel sees it:
-        `(occ, used)`. Blocks the state already considers placed (e.g.
-        letters baked into a Puzzle's starting grid) are fixed, and are
-        excluded from the search by marking them used."""
-        occ = np.zeros(self.tables.full.size, dtype=np.uint64)
-        for c in np.flatnonzero(self.state.grid != EMPTY):
-            occ[c >> 6] |= kernel.BIT[c & 63]
-
-        used = np.uint64(0)
-        chosen = self.state.chosen_placement_idx
-        for pos, block_idx in enumerate(self.block_ids):
-            if chosen[block_idx] != UNPLACED:
-                used |= kernel.BIT[pos]
-        return occ, used
-
-    def _emit(self, path):
-        """A path of global ids as a full State, independent of
-        self.state (which stays at the starting position).
-
-        place_unchecked writes the grid and chosen_placement_idx
-        together, so a yielded solution can never have one without the
-        other -- which is what tests/_helpers.assert_valid_solution
-        cross-checks."""
-        t = self.tables
-        solution = self.state.copy()
-        for gid in path:
-            pos = int(t.pblock[gid])
-            solution.place_unchecked(
-                self.block_ids[pos], int(gid - t.block_start[pos])
-            )
-        return solution
-
-    def solve(
-        self,
-        seed: int | None = None,
-        time_limit: float = math.inf,
-        max_solutions: float = math.inf,
-        order=None,
-        branch: str = "both",
-    ):
-        """Yield every solution as a fully placed copy of the state, or --
-        if a limit is hit first -- just the ones found by then. The
-        generator's return value (what `yield from` evaluates to, or
-        StopIteration.value) says which: True if the search ran to the end,
-        so every solution was yielded; False if a limit cut it short.
-
-        `time_limit` (seconds, counted from the first `next()`) and
-        `max_solutions` both default to infinity; the search stops as soon
-        as either is reached. The time is checked at kernel chunk
-        boundaries, so it can overshoot by about one chunk (~2 ms).
-
-        `seed` randomises the order solutions are found in without
-        changing the set: it draws one random priority per placement,
-        used only to break ties the search's own ordering leaves open.
-        Unseeded, ties fall to placement index order. Nothing is ever
-        reordered or shared, so a seed can't disturb anything indexed by
-        placement.
-
-        Every node branches on one *item* and tries every placement that
-        settles it, so the branches partition the node's solutions:
-        nothing is missed and nothing is found twice. `branch` picks which
-        kind of item, and only affects speed:
-
-        - "both" (the default): whichever of the two below has fewer live
-          placements at this node. The counts are directly comparable --
-          a child of either kind places exactly one block -- so this is
-          simply better informed than either alone, and it wins or ties
-          everywhere.
-        - "cell": always the empty cell with the fewest live placements.
-        - "block": always the unplaced block with the fewest. Sound, and
-          a useful baseline, but much the weakest: it cannot notice a
-          cell that nothing can cover until some block runs out of room,
-          so it prunes almost nothing where little is pre-filled. On a
-          book puzzle that costs a factor (worst measured:
-          main_puzzles/65, 2 s against 0.01 s); on the empty main board
-          it finds no solution at all in 30 s, against ~1 ms for "both".
-
-        Measurements for the three modes are in SOLVER_NOTES.md.
-
-        `order` ranks each node's candidate placements. It changes the
-        order solutions come out in, never the set. The same rule is
-        applied to whatever candidate list the node built, and every rule
-        keys off a placement rather than off the item that was branched
-        on, so ordering is uniform across all three `branch` modes by
-        construction. Left as None it is on exactly when a limit is set,
-        which is when it can pay: it finds the first solutions markedly
-        sooner, but a full enumeration visits the same nodes whatever
-        order siblings are tried in, so there it is pure overhead.
-        Accepts:
-
-        - True / "counts": each candidate's cells' live-placement counts,
-          sorted ascending and compared like a tuple, so a placement
-          covering the scarcest cells goes first.
-        - "pockets": fewest empty cells stranded with no empty neighbour.
-          Those cells can never be covered, so this rejects a dead branch
-          one ply early.
-        - "fanout": fewest options left for the next empty cell.
-        - False: table order (but see the seed note above).
-        """
-        return (yield from _each(
-            self._chunks(seed, time_limit, max_solutions, order, branch),
-            lambda chunk: map(self._emit, chunk.tolist()),
-        ))
-
-    def solve_rows(
-        self,
-        seed: int | None = None,
-        time_limit: float = math.inf,
-        max_solutions: float = math.inf,
-        order=None,
-        branch: str = "both",
-    ):
-        """solve()'s solutions, in the same order, as bare rows instead of
-        States: one int64 array per solution holding the placement index of
-        every block -- pre-placed ones included -- in `block_ids` order
-        (= the Setup's block order). No State is built, so this is the path
-        for anything that only counts, times or tabulates solutions;
-        Setup.rows_to_grids turns rows back into grids. Same arguments and
-        return value as solve()."""
-        t = self.tables
-        # The pre-placed blocks' columns never change; a searched path
-        # fills in the rest.
-        chosen = self.state.chosen_placement_idx
-        base = np.array([chosen[idx] for idx in self.block_ids], dtype=np.int64)
-
-        def rows(chunk):
-            pos = t.pblock[chunk]
-            out = np.repeat(base[None, :], len(chunk), axis=0)
-            np.put_along_axis(out, pos, chunk - t.block_start[pos], axis=1)
-            return out
-
-        return (yield from _each(self._chunks(seed, time_limit, max_solutions, order, branch), rows))
-
-    def _chunks(self, seed, time_limit, max_solutions, order, branch):
-        """The search itself, shared by solve() and solve_rows(): yields
-        each kernel return's solutions as a (k, n_searched) int array of
-        global placement ids, trimmed so no more than `max_solutions` are
-        ever yielded in total. Every solution of a puzzle places the same
-        blocks, so all paths have the same length. Returns True if the
-        search ran to the end (every solution was yielded), False if a
-        limit cut it short."""
-        t = self.tables
-        branch_rule, rank_rule = _resolve_rules(
-            seed, time_limit, max_solutions, order, branch
-        )
-
-        if max_solutions <= 0 or time_limit <= 0:
+    deadline = time.perf_counter() + time_limit
+    found = 0
+    rate = None  # nodes per second, an EMA; only sizes chunks, never affects output
+    while True:
+        remaining = deadline - time.perf_counter()
+        if remaining <= 0:
             return False
-
-        # Local, not on self: two live generators from one Solver must not
-        # share (and overwrite) each other's seeded tie-break order.
-        n_placements = t.pmask.shape[0]
-        if seed is None:
-            priority = np.arange(n_placements, dtype=np.int32)
+        if rate is None:
+            budget = _CALIB_CHUNK
         else:
-            priority = np.random.default_rng(seed).permutation(n_placements).astype(np.int32)
+            budget = int(min(max(rate * min(_CHUNK_SECONDS, remaining), _MIN_CHUNK), _MAX_CHUNK))
+        t0 = time.perf_counter()
+        status, n_sol, nodes = kernel.kernel(t, w, cap, budget, rank_rule, priority, branch_rule)
+        elapsed = time.perf_counter() - t0
+        if nodes > 0 and elapsed > 0:
+            rate = nodes / elapsed if rate is None else 0.7 * rate + 0.3 * nodes / elapsed
 
-        deadline = time.perf_counter() + time_limit
-        found = 0
-
-        # The kernel is never told max_solutions -- it gets a per-call
-        # buffer cap and a node budget, and all the counting stays here.
-        cap = _SOL_CAP
-        if max_solutions < math.inf:
-            cap = int(min(_SOL_CAP, math.ceil(max_solutions)))
-        w = kernel.make_workspace(t, *self._start(), cap=cap)
-
-        while True:
-            remaining = deadline - time.perf_counter()
-            if remaining <= 0:
+        if n_sol:
+            take = int(min(n_sol, max_solutions - found))
+            found += take
+            # The kernel's paths are global placement ids, (take, n_searched);
+            # a row holds each block's own placement index at its column.
+            # Built as a fresh array, so re-entering the kernel (which
+            # reuses sol_buf) can't touch rows already yielded.
+            paths = w.sol_buf[:take, :w.sol_len[0]]
+            pos = t.pblock[paths]
+            rows = np.repeat(base[None, :], take, axis=0)
+            np.put_along_axis(rows, pos, paths - t.block_start[pos], axis=1)
+            yield from rows
+            if take < n_sol:  # max_solutions cut this batch short
                 return False
-            budget = self._next_budget(remaining)
-            t0 = time.perf_counter()
-            status, n_sol, nodes = kernel.kernel(
-                t, w, cap, budget, rank_rule, priority, branch_rule
-            )
-            self._observe(nodes, time.perf_counter() - t0)
-
-            if n_sol:
-                take = int(min(n_sol, max_solutions - found))
-                found += take
-                yield w.sol_buf[:take, :w.sol_len[0]].copy()
-                if take < n_sol:  # max_solutions cut this batch short
-                    return False
-            if status == kernel.DONE:
-                return True
-            if found >= max_solutions:
-                return False
+        if status == kernel.DONE:
+            return True
+        if found >= max_solutions:
+            return False

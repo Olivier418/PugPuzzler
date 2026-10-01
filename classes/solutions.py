@@ -1,10 +1,9 @@
-from collections import UserDict
 from typing import NamedTuple
 
 import numpy as np
 
+from .puzzle import Puzzle
 from .setup import Setup
-from .state import Puzzle, State
 
 
 class SolveStats(NamedTuple):
@@ -18,39 +17,29 @@ class SolveStats(NamedTuple):
 
     `complete` says whether the run found every solution: True if the
     search ran to the end, False if `time_limit`/`max_solutions` cut it
-    short, None if not recorded (runs saved before it was)."""
+    short (see solver.solve_rows' return value)."""
     puzzle_name: str
     options: dict
     seed: int | None
     duration: float
+    complete: bool
     elapsed: list[float]  # per-solution elapsed time, same order/index as the matching Solution.rows (if kept)
-    complete: bool | None = None
-
-
-def _book_name(book_name: str | None, puzzle_names) -> str | None:
-    """Display/folder name shared by SolutionBook and SolveStatsBook: the
-    book's own name, or -- for a book-less container wrapping a single
-    puzzle -- that puzzle's name. Never stored separately, so it can't
-    drift from book_name."""
-    if book_name:
-        return book_name
-    puzzle_names = list(puzzle_names)
-    return puzzle_names[0] if len(puzzle_names) == 1 else None
 
 
 class Solution:
     """One Puzzle's solutions: the Puzzle itself plus every solution as a
     row -- the placement index of every block, in the Setup's block order
-    (see Solver.solve_rows), the solver's own form and ~20x smaller than a
+    (see solver.solve_rows), the solver's own form and ~20x smaller than a
     grid. Grids exist only at the edges: `grids` builds them on demand
     (full board-shaped, see Setup.rows_to_grids), solutions.json stores
     them as letters, and printing renders them.
 
     The Puzzle is always live -- the one solving.py solved, or the one
-    serialization.load_run found in games/ -- so everything
+    serialization.load_run_books found in games/ -- so everything
     about it (name, difficulty, filled cells, Setup) is read off it rather
     than copied here, where it could drift.
 
+    A book's solutions (or stats) are just a dict keyed by puzzle name.
     Producing one (solving + saving) lives in `solving.py`."""
 
     def __init__(self, puzzle: Puzzle, rows: np.ndarray):
@@ -74,65 +63,9 @@ class Solution:
     def setup(self) -> Setup:
         return self.puzzle.setup
 
-    def to_states(self) -> list[State]:
-        """The solutions as fully placed States on the puzzle's Setup."""
-        states = []
-        for row in self.rows:
-            state = State(self.setup)
-            for idx, placement_idx in zip(self.setup.blocks, row):
-                state.place_unchecked(idx, int(placement_idx))
-            states.append(state)
-        return states
-
     def __repr__(self) -> str:
         if not len(self):
             return f"Solution to puzzle {self.puzzle_name} (no results)"
         return "\n\n".join(
-            self.setup.render(state.grid, header=f"Solution {i} to puzzle {self.puzzle_name}")
-            for i, state in enumerate(self.to_states(), start=1)
+            self.puzzle.solved_copy(row, nr).render() for nr, row in enumerate(self.rows, start=1)
         )
-
-
-class SolutionBook(UserDict):
-    """Container for batch solution results, keyed by puzzle name."""
-    def __init__(self, *solutions: Solution, book_name: str = None):
-        self.book_name = book_name
-        super().__init__({sol.puzzle_name: sol for sol in solutions})
-
-    @property
-    def name(self) -> str | None:
-        return _book_name(self.book_name, self)
-
-    def __repr__(self) -> str:
-        header = f"Solution Book {self.name}" if self.name else "Solution Book"
-        body = "\n\n".join(repr(sol) for sol in self.values())
-        return f"{header}\n\n{body}" if body else header
-
-
-class SolveStatsBook(UserDict):
-    """Container for batch solve stats, mirroring SolutionBook's shape."""
-    def __init__(
-        self,
-        *stats: SolveStats,
-        book_name: str = None,
-        options: dict = None,
-        seed: int = None,
-    ):
-        self.book_name = book_name
-        self.options = dict(options or {})
-        self.seed = seed
-        super().__init__({s.puzzle_name: s for s in stats})
-
-    @property
-    def name(self) -> str | None:
-        return _book_name(self.book_name, self)
-
-    def __repr__(self) -> str:
-        header = f"Solve Stats {self.name}" if self.name else "Solve Stats"
-        lines = [
-            f"{s.puzzle_name}: options={s.options} seed={s.seed} duration={s.duration:.3f}s "
-            f"({len(s.elapsed)} solutions)"
-            for s in self.values()
-        ]
-        body = "\n".join(lines)
-        return f"{header}\n{body}" if body else header

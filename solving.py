@@ -1,10 +1,9 @@
 """Solving puzzles and packaging the outcome: run the solver over a Puzzle /
-PuzzleBook, time it, wrap the results in Solution/SolveStats containers and
-(opt-in, `save_solutions`/`save_stats`) save them to a folder mirroring where
-the puzzle was loaded from. Every solve here is timed by timed_solve, on the
-solver's fast rows path. Sits above both `classes` (the
-data model) and `serialization` (disk I/O), so neither has to import the
-other."""
+PuzzleBook, time it, wrap the results in Solution/SolveStats and (opt-in,
+`save_solutions`/`save_stats`) save them to a folder mirroring where the
+puzzle was loaded from. Every solve here is timed by timed_solve, on the
+solver's fast rows path. Sits above both `classes` (the data model) and
+`serialization` (disk I/O), so neither has to import the other."""
 import math
 import time
 from enum import IntEnum
@@ -13,10 +12,9 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from classes import Game, Puzzle, PuzzleBook, Setup, Solution, SolutionBook, SolveStats, SolveStatsBook
-from constants import SOLUTION_DIR, UNPLACED
-from serialization import save_run
-from serialization.paths import next_run_dir
+from classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats
+from constants import SOLUTION_DIR
+from serialization import next_run_dir, save_run
 
 
 class Verbosity(IntEnum):
@@ -34,17 +32,6 @@ class Verbosity(IntEnum):
 def _ordinal(n: int) -> str:
     suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suffix}"
-
-
-def single_run_books(solution: Solution, stats: SolveStats) -> tuple[SolutionBook, SolveStatsBook]:
-    """Wrap one puzzle's (Solution, SolveStats) in book containers, which is
-    what buys save_run/load_run compatibility."""
-    source = solution.puzzle.source
-    book_name = source.book_name if source else None
-    return (
-        SolutionBook(solution, book_name=book_name),
-        SolveStatsBook(stats, book_name=book_name, options=stats.options, seed=stats.seed),
-    )
 
 
 class _RowBuffer:
@@ -66,16 +53,6 @@ class _RowBuffer:
         return self._buf[:self._n].copy()
 
 
-def _state_from_row(puzzle: Puzzle, row: np.ndarray, nr: int) -> Puzzle:
-    """A solution row as the fully placed copy of `puzzle` that
-    Puzzle.solve would have yielded, named "<name> (solution <nr>)"."""
-    state = puzzle.copy(rename=f"{puzzle.name} (solution {nr})" if puzzle.name else None)
-    for idx, placement_idx in zip(puzzle.blocks, row):
-        if state.chosen_placement_idx[idx] == UNPLACED:
-            state.place_unchecked(idx, int(placement_idx))
-    return state
-
-
 def timed_solve(
     puzzle: Puzzle,
     seed: int = None,
@@ -87,13 +64,13 @@ def timed_solve(
     **options,
 ) -> tuple[np.ndarray | None, SolveStats]:
     """Solve `puzzle` on the clock every solve is timed with, and return
-    its solutions as rows (see Solver.solve_rows; None unless `keep_rows`)
+    its solutions as rows (see solver.solve_rows; None unless `keep_rows`)
     plus the run's SolveStats, `complete` included. The one timing path
     shared by solve_puzzle and puzzle_bounds, so their times compare.
 
     What is on the clock: the search, one elapsed stamp per solution, and
-    whatever `verbose` prints per solution (at SHOW_SOLUTIONS a State is
-    built from the row to print it). What isn't: numba's warmup and
+    whatever `verbose` prints per solution (at SHOW_SOLUTIONS a solved
+    Puzzle is built from the row to print it). What isn't: numba's warmup and
     anything done with the rows afterwards (e.g. building grids).
     `progress` shows a tqdm bar of solutions found."""
     # Kept out of the clock: a one-off per-process cost, not search time.
@@ -114,7 +91,7 @@ def timed_solve(
         if rows is not None:
             rows.append(row)
         if verbose >= Verbosity.SHOW_SOLUTIONS:
-            print(_state_from_row(puzzle, row, len(elapsed)))
+            print(puzzle.solved_copy(row, len(elapsed)))
         elif verbose >= Verbosity.EACH_SOLUTION:
             print(f"Found {_ordinal(len(elapsed))} solution to puzzle {puzzle.name} in {elapsed[-1]:.2f}s")
     duration = time.perf_counter() - start
@@ -128,23 +105,10 @@ def timed_solve(
         print(f"Found {len(elapsed)} {noun}{target} in {duration:.2f}s")
 
     stats = SolveStats(
-        puzzle_name=puzzle.name, options=dict(options), seed=seed, duration=duration, elapsed=elapsed,
-        complete=complete,
+        puzzle_name=puzzle.name, options=dict(options), seed=seed, duration=duration, complete=complete,
+        elapsed=elapsed,
     )
     return (rows.array() if rows is not None else None), stats
-
-
-def empty_puzzle(game: Game, board_key: str) -> Puzzle:
-    """`game`'s empty puzzle on its `board_key` board, the standalone
-    games/<game>/puzzles/empty_<board_key>.json every game ships."""
-    name = f"empty_{board_key}"
-    puzzle = game.puzzles.get(name)
-    if puzzle is None or puzzle.setup is not game.setups[board_key] or puzzle.nr_filled_cells:
-        raise ValueError(
-            f"Game {game.name!r} has no empty puzzle {name!r} on board {board_key!r} "
-            f"(games/{game.name}/puzzles/{name}.json)."
-        )
-    return puzzle
 
 
 def solve_puzzle(
@@ -153,7 +117,6 @@ def solve_puzzle(
     verbose: int = Verbosity.SILENT,
     save_solutions: bool = False,
     save_stats: bool = False,
-    path: str | Path = None,
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
@@ -163,23 +126,18 @@ def solve_puzzle(
     """Solve a single Puzzle and save the solved grids (`save_solutions`)
     and/or the run's SolveStats (`save_stats`) to a folder mirroring where
     the Puzzle itself was loaded from, under `solutions_root` (e.g.
-    games/IQpuzzler/puzzles/main_empty ->
-    solutions/IQpuzzler/puzzles/main_empty/result_<idx>/{solutions,stats}.json).
+    games/IQpuzzler/puzzles/empty_main ->
+    solutions/IQpuzzler/puzzles/empty_main/result_<idx>/{solutions,stats}.json).
 
     Saving is off by default; the two flags are independent, since the
     grids are the bulk of a save and the stats are useful without them.
-    Pass `path=` to save somewhere specific instead of the mirrored default
-    (`path` alone does not save). `verbose` (see Verbosity)
-    controls progress printing. `time_limit` (seconds) and
-    `max_solutions` stop the solve early, whichever is hit first (both
-    default to infinity; not recorded in the SolveStats -- its
-    `duration` and `elapsed` show a truncated run). They are named here
-    rather than left in `options` because they change which solutions
-    come back, not how they are found. `options` are forwarded to the
-    solver and recorded in the SolveStats.
-
-    Timed by timed_solve (`progress` shows its bar); the stats say whether
-    the run is `complete`.
+    `verbose` (see Verbosity) controls progress printing, `progress` shows
+    a bar of solutions found. `time_limit` (seconds) and `max_solutions`
+    stop the solve early, whichever is hit first (both default to
+    infinity; not recorded in the SolveStats -- `complete` says the run
+    was cut short). They are named here rather than left in `options`
+    because they change which solutions come back, not how they are found.
+    `options` are forwarded to the solver and recorded in the SolveStats.
     """
     rows, stats = timed_solve(
         puzzle, seed=seed, verbose=verbose, time_limit=time_limit, max_solutions=max_solutions,
@@ -188,10 +146,10 @@ def solve_puzzle(
     solution = Solution(puzzle, rows)
 
     if save_solutions or save_stats:
-        target = Path(path) if path is not None else next_run_dir(puzzle.source, solutions_root)
-        solution_book, stats_book = single_run_books(solution, stats)
         save_run(
-            solution_book if save_solutions else None, stats_book if save_stats else None, target,
+            {puzzle.name: solution} if save_solutions else None,
+            {puzzle.name: stats} if save_stats else None,
+            next_run_dir(puzzle.source, solutions_root),
         )
 
     return solution, stats
@@ -203,45 +161,28 @@ def solve_puzzlebook(
     verbose: int = Verbosity.SILENT,
     save_solutions: bool = False,
     save_stats: bool = False,
-    path: str | Path = None,
     solutions_root: str | Path = SOLUTION_DIR,
     time_limit: float = math.inf,
     max_solutions: float = math.inf,
+    progress: bool = False,
     **options,
-) -> tuple[SolutionBook, SolveStatsBook]:
-    """Solve every puzzle in a PuzzleBook and save the combined solutions
-    (`save_solutions`) and/or solve stats (`save_stats`) to a folder
-    mirroring where the book itself was loaded from (see solve_puzzle for
-    the mirroring rule). `verbose` applies to each puzzle in turn.
-
-    `time_limit` and `max_solutions` apply to each puzzle separately.
-
-    Delegates per-puzzle solving to solve_puzzle so the two entry points
-    can't drift apart; only the batching and the single combined save are
-    specific to this function.
-    """
-    solutions = []
-    stats_list = []
-
-    for puzzle in puzzlebook.values():
-        solution, stats = solve_puzzle(
-            puzzle,
-            seed=seed,
-            verbose=verbose,
-            time_limit=time_limit,
-            max_solutions=max_solutions,
-            **options,
+) -> tuple[dict[str, Solution], dict[str, SolveStats]]:
+    """Solve every puzzle in a PuzzleBook, as solve_puzzle would, and save
+    the combined solutions and/or stats (keyed by puzzle name) as one run
+    folder mirroring where the book itself was loaded from. `verbose`,
+    `time_limit` and `max_solutions` apply to each puzzle separately;
+    `progress` shows a bar of puzzles solved."""
+    solutions, stats = {}, {}
+    for puzzle in tqdm(puzzlebook.values(), desc=f"Solving {puzzlebook.name}", unit=" puzzles", disable=not progress):
+        solutions[puzzle.name], stats[puzzle.name] = solve_puzzle(
+            puzzle, seed=seed, verbose=verbose, time_limit=time_limit, max_solutions=max_solutions, **options,
         )
-        solutions.append(solution)
-        stats_list.append(stats)
-
-    solution_book = SolutionBook(*solutions, book_name=puzzlebook.name)
-    stats_book = SolveStatsBook(*stats_list, book_name=puzzlebook.name, options=options, seed=seed)
 
     if save_solutions or save_stats:
-        target = Path(path) if path is not None else next_run_dir(puzzlebook.source, solutions_root)
         save_run(
-            solution_book if save_solutions else None, stats_book if save_stats else None, target, flat=False,
+            solutions if save_solutions else None,
+            stats if save_stats else None,
+            next_run_dir(puzzlebook.source, solutions_root),
         )
 
-    return solution_book, stats_book
+    return solutions, stats

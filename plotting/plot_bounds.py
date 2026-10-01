@@ -3,12 +3,12 @@ from collections.abc import Mapping
 import matplotlib.pyplot as plt
 import numpy as np
 
-from classes import Puzzle, SolveStatsBook
+from classes import Puzzle, SolveStats
 from constants import OUT_OF_BOUNDS_COLOR
 from .plot_puzzle_stats import METRICS, format_axes, solved_puzzles
 
 
-def _bound_curve(puzzles: Mapping[str, Puzzle], stats: SolveStatsBook) -> tuple[np.ndarray, np.ndarray]:
+def _bound_curve(puzzles: Mapping[str, Puzzle], stats: Mapping[str, SolveStats]) -> tuple[np.ndarray, np.ndarray]:
     """(filled counts, solution counts) of one bound's puzzles, by filled count."""
     filled, count = METRICS["nr_filled_cells"], METRICS["nr_solutions"]
     points = sorted(
@@ -20,9 +20,9 @@ def _bound_curve(puzzles: Mapping[str, Puzzle], stats: SolveStatsBook) -> tuple[
 
 def plot_bounds(
     lower_puzzles: Mapping[str, Puzzle],
-    lower_stats: SolveStatsBook,
+    lower_stats: Mapping[str, SolveStats],
     upper_puzzles: Mapping[str, Puzzle],
-    upper_stats: SolveStatsBook,
+    upper_stats: Mapping[str, SolveStats],
     title: str | None = None,
     ax: plt.Axes = None,
 ) -> plt.Axes:

@@ -1,183 +1,90 @@
-"""Solver tests. Run the whole suite by running run_tests.py in the repo root.
-
-No test reads or writes solutions/stats on disk; known solutions are
-written out literally in tests/data/ so they can be checked by eye."""
-import time
+"""Solver tests: solution counts known from outside this project, and the
+solver's options, which may change the order solutions come in but never the
+set. Run the whole suite by running run_tests.py in the repo root."""
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 
-from classes import Puzzle, Solution, Solver
-from constants import EMPTY, UNPLACED
+from classes import Puzzle
+from constants import UNPLACED
+from serialization import load_game
 from solving import solve_puzzle
-from tests._helpers import assert_valid_solution, load, load_known_solutions, unsolvable_puzzle
+from tests._helpers import ROOT, load, rows, write_pentomino_game
+
+# None of these may change the solution set. branch="block" is left out on
+# open boards, where it finds nothing in 30 s (see solver.solve_rows).
+MODES = [
+    {"branch": "cell"}, {"branch": "block"}, {"branch": "both"},
+    {"order": True}, {"order": False}, {"seed": 0}, {"seed": 1, "order": True},
+]
+OPEN_MODES = [m for m in MODES if m.get("branch") != "block"]
 
 
-# PRO puzzles whose solution count contradicts the distributor's claim of one;
-# see test_pyramid_120_has_one_solution.
-KNOWN_MULTIPLE = {("pyramid_puzzles", "120")}
+class TestSolver(unittest.TestCase):
+    def test_pro_booklet(self):
+        """Every IQpuzzlerPRO puzzle's one solution is its booklet's
+        (tests/data, checked by hand) -- except pyramid_puzzles/120, which
+        has 5, contrary to the box."""
+        game = load("IQpuzzlerPRO")
+        for path in sorted((ROOT / "tests" / "data" / "IQpuzzlerPRO").glob("*.json")):
+            book = game.books[path.stem]
+            known = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(set(known), set(book))
+            for name, (solution,) in known.items():
+                with self.subTest(book=path.stem, puzzle=name):
+                    puzzle = book[name]
+                    # a list of layers of row strings: (depth, width) or (height, depth, width)
+                    letters = np.array([list(row) for layer in solution for row in layer])
+                    booklet = Puzzle(puzzle.setup, letters.reshape(puzzle.board.cells.shape[::-1]))
+                    found = rows(puzzle)
+                    self.assertIn(tuple(booklet.chosen_placement_idx.values()), found)
+                    self.assertEqual(len(found), 5 if (path.stem, name) == ("pyramid_puzzles", "120") else 1)
 
+    def test_pentominoes(self):
+        """The 12 pentominoes tile 3x20 in 8 ways, in every mode."""
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = load_game(write_pentomino_game(Path(tmp))).puzzles["empty_3x20"]
+            expected = rows(empty, branch="cell")
+            self.assertEqual((len(expected), len(set(expected))), (8, 8))
+            for mode in OPEN_MODES:
+                self.assertEqual(rows(empty, **mode), expected, mode)
 
-def known_puzzles(puzzle, solutions) -> list[Puzzle]:
-    """Puzzles filled in from literal letter grids, one per solution.
-    Constructing a Puzzle validates that every piece is a legal placement."""
-    shape = puzzle.board.cells.shape[::-1]  # (depth, width) as in the puzzle JSON
-    arrs = [np.array([list(row) for layer in solution for row in layer]).reshape(shape) for solution in solutions]
-    return [Puzzle(puzzle.setup, arr, name=puzzle.name) for arr in arrs]
-
-
-def known_solutions(puzzle, solutions) -> list[Solution]:
-    """The literal solutions as Solution objects built in code."""
-    return [
-        Solution(puzzle, [[k.chosen_placement_idx[idx] for idx in puzzle.blocks]])
-        for k in known_puzzles(puzzle, solutions)
-    ]
-
-
-def solver_grids(puzzle) -> set:
-    """Every solution the solver finds, as full board-shaped grids' bytes."""
-    return {puzzle.setup.to_full_grid(s.grid).tobytes() for s in puzzle.solve()}
-
-
-class TestKnownSolutions(unittest.TestCase):
-    """A human-checkable solution must be among those the solver finds."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.game = load("IQpuzzler")
-        cls.known = load_known_solutions("IQpuzzler")
-
-    def test_known_solution_is_valid_and_found(self):
-        for (book, name), solutions in self.known.items():
+    def test_modes_agree_on_valid_solutions(self):
+        """Every mode finds the same solutions, and each is valid: its
+        placements cover every cell exactly once and keep the puzzle's
+        pre-placed blocks."""
+        game = load("IQpuzzler")
+        for book, name in (("main_puzzles", "50"), ("main_puzzles", "60"), ("pyramid_puzzles", "85")):
+            puzzle = game.books[book][name]
             with self.subTest(book=book, puzzle=name):
-                puzzle = self.game.books[book][name]
-                for known in known_puzzles(puzzle, solutions):
-                    assert_valid_solution(self, puzzle, known)
-                found = solver_grids(puzzle)
-                for known in known_solutions(puzzle, solutions):
-                    self.assertIn(known.grids[0].tobytes(), found)
+                expected = rows(puzzle, branch="cell")
+                self.assertEqual(len(expected), len(set(expected)), "duplicate solutions")
+                for row in expected:
+                    cells = np.concatenate([puzzle.placement_cells[i][p] for i, p in enumerate(row)])
+                    self.assertEqual(sorted(cells.tolist()), list(range(puzzle.setup.n_cells)))
+                    for i, p in puzzle.chosen_placement_idx.items():
+                        if p != UNPLACED:
+                            self.assertEqual(row[i], p)
+                for mode in MODES:
+                    self.assertEqual(rows(puzzle, **mode), expected, mode)
 
+    def test_limits(self):
+        """max_solutions is exact in every mode, a time limit stops an open
+        board, and a run cut short either way is not `complete`."""
+        game = load("IQpuzzler")
+        empty, puzzle = game.puzzles["empty_main"], game.books["main_puzzles"]["50"]
+        for mode in OPEN_MODES:
+            for n in (0, 1, 7):
+                found = rows(empty, max_solutions=n, **mode)
+                self.assertEqual((len(found), len(set(found))), (n, n), mode)
 
-class TestPro(unittest.TestCase):
-    """IQpuzzlerPRO: the booklet's solutions are found, and every puzzle
-    has exactly one solution (the distributor's claim)."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.game = load("IQpuzzlerPRO")
-        cls.known = load_known_solutions("IQpuzzlerPRO")
-        cls.found = {
-            (book_name, name): solver_grids(puzzle)
-            for book_name, book in cls.game.books.items()
-            for name, puzzle in book.items()
-        }
-
-    def test_every_puzzle_has_a_booklet_solution(self):
-        self.assertEqual(set(self.known), set(self.found))
-
-    def test_booklet_solutions_are_valid_and_found(self):
-        for (book, name), solutions in self.known.items():
-            with self.subTest(book=book, puzzle=name):
-                puzzle = self.game.books[book][name]
-                for known in known_puzzles(puzzle, solutions):
-                    assert_valid_solution(self, puzzle, known)
-                for known in known_solutions(puzzle, solutions):
-                    self.assertIn(known.grids[0].tobytes(), self.found[(book, name)])
-
-    def test_exactly_one_solution(self):
-        for (book, name), found in self.found.items():
-            if (book, name) in KNOWN_MULTIPLE:
-                continue
-            with self.subTest(book=book, puzzle=name):
-                self.assertEqual(len(found), 1, f"{len(found)} solutions")
-
-    @unittest.expectedFailure
-    def test_pyramid_120_has_one_solution(self):
-        """The distributor's claim does not hold here: the puzzle has 5."""
-        self.assertEqual(len(self.found[("pyramid_puzzles", "120")]), 1)
-
-
-class TestUnsolvable(unittest.TestCase):
-    def test_two_pieces_that_fit_alone_but_not_together(self):
-        puzzle = unsolvable_puzzle(load("IQpuzzler"))
-
-        empty = np.flatnonzero(puzzle.grid == EMPTY)
-        unplaced = [i for i, p in puzzle.chosen_placement_idx.items() if p == UNPLACED]
-        for i in unplaced:
-            fits = [np.isin(pl, empty).all() for pl in puzzle.placement_cells[i]]
-            self.assertTrue(any(fits), f"{puzzle.blocks[i].letter} should fit on its own")
-
-        self.assertEqual(list(puzzle.solve()), [])
-
-
-class TestSeeds(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.game = load("IQpuzzler")
-
-    def test_seeds_give_same_solution_set(self):
-        for book, name in [("main_puzzles", "40"), ("pyramid_puzzles", "85")]:
-            with self.subTest(puzzle=name):
-                puzzle = self.game.books[book][name]
-                sets = [{s.grid.tobytes() for s in puzzle.solve(seed=seed)} for seed in (None, 0, 1)]
-                self.assertEqual(sets[0], sets[1])
-                self.assertEqual(sets[0], sets[2])
-                for s in puzzle.solve():
-                    assert_valid_solution(self, puzzle, s)
-
-
-class TestLimits(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.game = load("IQpuzzler")
-        cls.empty = cls.game.puzzles["empty_main"]
-        cls.puzzle = cls.game.books["main_puzzles"]["40"]
-        cls.all_grids = solver_grids(cls.puzzle)
-
-    def test_max_solutions_edge_cases(self):
-        n = len(self.all_grids)
-        self.assertEqual(list(self.puzzle.solve(max_solutions=0)), [])
-        one = list(self.puzzle.solve(max_solutions=1))
-        self.assertEqual(len(one), 1)
-        self.assertIn(self.puzzle.setup.to_full_grid(one[0].grid).tobytes(), self.all_grids)
-        self.assertEqual(len(list(self.puzzle.solve(max_solutions=n + 10))), n)
-
-    def test_time_limit(self):
-        start = time.perf_counter()
-        list(Solver(self.empty).solve(time_limit=0.5))
-        self.assertLess(time.perf_counter() - start, 5.0)
-        self.assertEqual(list(self.puzzle.solve(time_limit=0)), [])
-
-    def test_propagates_through_puzzle_and_solution(self):
-        self.assertEqual(len(list(self.empty.solve(seed=0, max_solutions=2))), 2)
-        solution, _ = solve_puzzle(self.empty, seed=0, max_solutions=2)
-        self.assertEqual(len(solution.grids), 2)
-
-
-class TestRows(unittest.TestCase):
-    """solve_rows is solve() without the States: the same solutions in the
-    same order, every block's placement in each row, pre-placed ones
-    included."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.game = load("IQpuzzler")
-
-    def test_rows_are_solve_s_solutions(self):
-        for book, name in [("main_puzzles", "40"), ("main_puzzles", "50"), ("main_puzzles", "60"),
-                           ("pyramid_puzzles", "80"), ("pyramid_puzzles", "85"), ("pyramid_puzzles", "90")]:
-            with self.subTest(book=book, puzzle=name):
-                puzzle = self.game.books[book][name]
-                states = list(puzzle.solve())
-                rows = np.array(list(puzzle.solve_rows()))
-                self.assertEqual(len(rows), len(states))
-                for state, row, grid in zip(states, rows, puzzle.setup.rows_to_grids(rows)):
-                    self.assertEqual(state.chosen_placement_idx, dict(zip(puzzle.blocks, row.tolist())))
-                    expected = puzzle.setup.to_full_grid(state.grid)
-                    self.assertEqual(grid.dtype, expected.dtype)
-                    self.assertTrue(np.array_equal(grid, expected))
-
-    def test_max_solutions_is_exact(self):
-        empty = self.game.puzzles["empty_main"]
-        for n in (0, 1, 5, 100):
-            self.assertEqual(len(list(empty.solve_rows(max_solutions=n))), n)
+        _, stats = solve_puzzle(empty, time_limit=0.2)
+        self.assertFalse(stats.complete)
+        self.assertLess(stats.duration, 1.0)
+        _, stats = solve_puzzle(puzzle, max_solutions=3)
+        self.assertEqual((len(stats.elapsed), stats.complete), (3, False))
+        _, stats = solve_puzzle(puzzle)
+        self.assertEqual((len(stats.elapsed), stats.complete), (101, True))

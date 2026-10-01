@@ -1,8 +1,6 @@
 from collections import UserDict
 
-from ._utils import _assert_unique, _shared
-from .blocks import BlockCollection
-from .boards import Board
+from ._utils import _assert_unique
 from .setup import Setup
 
 
@@ -11,26 +9,18 @@ class PuzzleBook(UserDict):
         if not puzzles:
             raise ValueError(f"A PuzzleBook needs at least one puzzle (book {name!r} is empty).")
         _assert_unique(puzzles, lambda p: p.name, "puzzle name")
-        # Every puzzle in a book is built from one shared Setup (that's
-        # the whole point -- see Setup's docstring), so the book can
-        # expose it directly instead of making callers reach into an
-        # arbitrary puzzle's .setup themselves.
-        self.setup: Setup = _shared(puzzles, lambda p: p.setup, "Setup")
+        # Every puzzle in a book is built on one shared Setup (that's the
+        # whole point -- see Setup's docstring), which the book exposes.
+        self.setup: Setup = puzzles[0].setup
+        if any(p.setup is not self.setup for p in puzzles):
+            raise ValueError(f"The puzzles of book {name!r} aren't all on the same Setup.")
         self.name = name
 
-        # Same idea as State.source: where this book was loaded from, if
-        # anywhere. Populated by serialization.loading.load_game.
+        # Same idea as Puzzle.source: where this book was loaded from, if
+        # anywhere. Set by the serialization.games_io loaders.
         self.source = None
 
         super().__init__({p.name: p for p in puzzles})
-
-    @property
-    def board(self) -> Board:
-        return self.setup.board
-
-    @property
-    def blocks(self) -> BlockCollection:
-        return self.setup.blocks
 
     def __repr__(self) -> str:
         header = f"Puzzle Book {self.name}" if self.name else "Puzzle Book"

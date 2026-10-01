@@ -18,9 +18,9 @@ def _colored_cell(block: Block) -> str:
 
 
 def grid_lines(board: Board, blocks: BlockCollection, grid: np.ndarray) -> list[str]:
-    """Render any grid shaped like `board` -- a State's own grid, a
-    solved grid from Solver, or otherwise -- into a list of
-    terminal-ready row strings (one per output row, already colored)."""
+    """Render any grid shaped like `board` (a puzzle's, a solution's)
+    into a list of terminal-ready row strings (one per output row,
+    already colored)."""
     # Unpack (width, depth, height)
     shape = board.cells.shape
     width, depth, height = (shape[0], shape[1], 1) if len(shape) == 2 else shape
@@ -122,7 +122,7 @@ def block_shape_lines(block: Block) -> tuple[list[str], int]:
 
 
 def legend_lines(blocks: BlockCollection, block_idcs) -> list[str]:
-    """Arrange the shape diagrams of several blocks (e.g. a State's
+    """Arrange the shape diagrams of several blocks (e.g. a puzzle's
     unplaced blocks) side by side in one row, used to lay unplaced blocks
     out underneath the board."""
     entries = [block_shape_lines(blocks[idx]) for idx in sorted(block_idcs)]

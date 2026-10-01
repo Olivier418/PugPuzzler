@@ -10,26 +10,23 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from classes import Puzzle, SolveStats, SolveStatsBook
+from classes import Puzzle, SolveStats
 from constants import BENCHMARK_DIR
-from serialization.paths import next_run_dir, puzzle_name_from_run_dir
-from serialization.stats_io import load_solve_stats_book, write_solve_stats
+from serialization import load_stats, next_run_dir, write_stats
 
 
 # A config is the dict of keyword options handed to the solver (besides the
-# seed): `branch` and `order` (see Solver.solve). An empty config means the
-# solver's own defaults -- so {"branch": "cell"} is the cells-only baseline,
-# not {}. Note that a benchmark trial always sets a time limit, so `order`
-# defaults to on.
+# seed): `branch` and `order` (see solver.solve_rows). An empty config means
+# the solver's own defaults -- so {"branch": "cell"} is the cells-only
+# baseline, not {}. Note that a benchmark trial always sets a time limit, so
+# `order` defaults to on.
 #
 # Only options that leave the solution set alone belong here; anything that
 # changes *which* solutions come back (time_limit, max_solutions) would make
 # two configs solve different problems, so those are named arguments on
 # solve_puzzle instead.
 DEFAULT_CONFIGS = (
-    {"order": "counts"},
-    {"order": "pockets"},
-    {"order": "fanout"},
+    {"order": True},
     {"order": False},
 )
 
@@ -76,8 +73,8 @@ def _worker(puzzle: Puzzle, config: dict, seed: int, T: float, conn):
     sends the stamps in batches ("solutions", [elapsed, ...]) at most every
     _BATCH_SECONDS, never the solutions themselves: a benchmark never keeps
     them, and pickling one message per solution would be billed as search
-    time. It ends with ("done", duration, complete) -- `complete` being
-    whether the search ran to the end (see Solver.solve). The solver is handed
+    time. It ends with ("done", (duration, complete)) -- `complete` being
+    whether the search ran to the end. The solver is handed
     `time_limit=T`, so it normally stops by itself a hair after T; the
     parent's kill is only the backstop.
     """
@@ -179,8 +176,8 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> Solve
     duration = min(worker_duration if worker_duration is not None else stopped, T)
 
     return SolveStats(
-        puzzle_name=puzzle.name, options=dict(config), seed=seed, duration=duration, elapsed=elapsed,
-        complete=complete,
+        puzzle_name=puzzle.name, options=dict(config), seed=seed, duration=duration, complete=complete,
+        elapsed=elapsed,
     )
 
 
@@ -218,9 +215,7 @@ def run_benchmark(
 
             for seed in range(nr_tests):
                 stats = _run_single_test(puzzle, config, seed, T)
-                # Flat: the puzzle's name is recovered from the path on load.
-                stats_book = SolveStatsBook(stats, options=stats.options, seed=seed)
-                write_solve_stats(stats_book, config_folder / f"stats{seed}.json")
+                write_stats({puzzle.name: stats}, config_folder / f"stats{seed}.json")
                 trials[config_key(config)].append(stats)
                 pbar.update(1)
 
@@ -229,14 +224,12 @@ def run_benchmark(
 
 def load_benchmark(folder: str | Path) -> dict[ConfigKey, list[SolveStats]]:
     """Reload a benchmark previously written by run_benchmark, without
-    re-solving anything. `folder` is the run's own folder -- the one
-    directly containing each config's subfolder -- i.e. exactly the path
-    run_benchmark returned."""
+    re-solving anything: the trials grouped by config (in config-folder
+    order), each group in seed order. `folder` is the run's own folder --
+    the one directly containing each config's subfolder -- i.e. exactly
+    the path run_benchmark returned."""
     trials: dict[ConfigKey, list[SolveStats]] = {}
-    for config_folder in sorted(p for p in Path(folder).iterdir() if p.is_dir()):
-        files = sorted(config_folder.glob("stats*.json"), key=lambda p: int(p.stem.removeprefix("stats")))
-        for file in files:
-            stats_book = load_solve_stats_book(file, puzzle_name_from_run_dir(file))
-            stats = next(iter(stats_book.values()))
+    for file in sorted(Path(folder).glob("*/stats*.json")):
+        for stats in load_stats(file).values():
             trials.setdefault(config_key(stats.options), []).append(stats)
-    return trials
+    return {key: sorted(runs, key=lambda s: s.seed) for key, runs in trials.items()}

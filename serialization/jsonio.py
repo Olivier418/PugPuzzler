@@ -1,7 +1,6 @@
-"""JSON helpers shared by the puzzle/solution readers and writers: a pretty
-printer that lays out letter grids one row per line, and the conversion
-between a letter grid (rows of single-character cells) and the row strings
-it is stored as on disk, both for plain letters and for grids of block
+"""JSON helpers shared by games_io and results_io: a pretty printer that lays
+out letter grids one row per line, and the conversion between the letter
+rows a grid is stored as on disk and letter arrays / grids of block
 indices."""
 import itertools
 import json
@@ -20,15 +19,6 @@ def parse_letter_grid(raw) -> np.ndarray:
     def split(item):
         return list(item) if isinstance(item, str) else [split(x) for x in item]
     return np.array(split(raw), dtype=str)
-
-
-def letter_grid_to_rows(arr: np.ndarray) -> list:
-    """Inverse of parse_letter_grid for an *internal* (width, depth[, height])
-    letter array: transposed back to the written orientation, then each row
-    joined into one string."""
-    def join(a):
-        return ["".join(row) for row in a] if a.ndim == 2 else [join(x) for x in a]
-    return join(np.asarray(arr).T)
 
 
 def block_grids_to_rows(grids: np.ndarray, blocks) -> list:

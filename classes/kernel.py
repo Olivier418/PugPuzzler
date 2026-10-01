@@ -2,8 +2,8 @@
 bitmask DFS compiled by numba.
 
 A leaf module -- it imports numpy and numba and nothing else, so it knows
-nothing about Setup/State/Puzzle. classes.solver owns the translation
-between this module's flat integer world and those objects.
+nothing about Setup/Puzzle. classes.solver owns the translation between
+this module's flat integer world and those objects.
 
 **Representation.** A cell is a bit. The board's occupancy is `occ`, an
 array of `NW = ceil(n_cells / 64)` uint64 words, and a placement is the
@@ -67,15 +67,13 @@ BRANCH_BOTH = 2   # whichever of the two is scarcer (the default)
 RANK_NONE = 0     # leave candidates in table order
 RANK_PRIORITY = 1  # by the per-solve random priority alone (seeded, order=False)
 RANK_COUNTS = 2   # scarcest cells' live counts first (order=True)
-RANK_POCKETS = 3  # fewest dead empty cells created
-RANK_FANOUT = 4   # most options left for the next cell
 
 _INF = np.int32(np.iinfo(np.int32).max)
 
 
 class Tables(NamedTuple):
     """Everything derived from a Setup alone. Built once per Setup and
-    shared by every Solver on it -- a whole book is one board and one
+    shared by every search on it -- a whole book is one board and one
     block collection, and none of this depends on which cells a
     particular puzzle starts with.
 
@@ -91,38 +89,31 @@ class Tables(NamedTuple):
     cell_pl: np.ndarray     # (incidences,) int32   -- gids through each cell
     block_start: np.ndarray  # (n_blocks + 1,) int64
     full: np.ndarray        # (NW,) uint64          -- all n_cells bits set
-    neigh: np.ndarray       # (n_cells, NW) uint64  -- adjacency, for RANK_POCKETS
     n_cells: int
     n_blocks: int
     fan: int                # widest candidate list: max(cell degree, block run)
 
 
-def build_tables(placement_cells, n_cells, cell_coords, unit_vectors):
-    """Tables from a Setup's `placement_cells` (block idx -> (N, k) array
-    of compact cell indices), its cell count, and -- for RANK_POCKETS'
-    adjacency -- the board position of every compact cell and the
-    lattice's unit vectors.
-
-    Returns `(tables, block_ids)`. `block_ids[p]` is the caller's block
-    key for block position p -- this module only ever speaks positions.
+def build_tables(placement_cells, n_cells):
+    """Tables from a Setup's `placement_cells` (one (N, k) array of
+    compact cell indices per block, in block order) and its cell count.
+    A block's position here is its index in that list, as everywhere else.
     """
-    block_ids = list(placement_cells)
-    n_blocks = len(block_ids)
+    n_blocks = len(placement_cells)
     if n_blocks > 64:
         # `used` is a single uint64; 12 blocks today, 10 on IQquub.
         raise ValueError(f"{n_blocks} blocks; the used-block mask holds 64.")
 
-    sizes = [placement_cells[b].shape[0] for b in block_ids]
+    sizes = [arr.shape[0] for arr in placement_cells]
     block_start = np.cumsum([0] + sizes, dtype=np.int64)
     n_total = int(block_start[-1])
-    kmax = max(arr.shape[1] for arr in placement_cells.values())
+    kmax = max(arr.shape[1] for arr in placement_cells)
     nw = max(1, -(-n_cells // 64))
 
     pcells = np.full((n_total, kmax), -1, dtype=np.int16)
     psize = np.zeros(n_total, dtype=np.uint8)
     pblock = np.zeros(n_total, dtype=np.uint8)
-    for pos, block_idx in enumerate(block_ids):
-        arr = placement_cells[block_idx]
+    for pos, arr in enumerate(placement_cells):
         lo, hi = int(block_start[pos]), int(block_start[pos + 1])
         pcells[lo:hi, :arr.shape[1]] = arr
         psize[lo:hi] = arr.shape[1]
@@ -147,29 +138,17 @@ def build_tables(placement_cells, n_cells, cell_coords, unit_vectors):
     for c in range(n_cells):
         full[c >> 6] |= BIT[c & 63]
 
-    # Two cells are neighbours when their coordinates differ by a lattice
-    # unit vector. Used only by RANK_POCKETS.
-    neigh = np.zeros((n_cells, nw), dtype=np.uint64)
-    lookup = {tuple(row): i for i, row in enumerate(cell_coords)}
-    for i, row in enumerate(cell_coords):
-        for v in unit_vectors:
-            j = lookup.get(tuple(row + v))
-            if j is not None:
-                neigh[i, j >> 6] |= BIT[j & 63]
-
     fan = int(max(np.diff(cell_start).max(initial=1), np.diff(block_start).max(initial=1)))
     return Tables(pmask, pblock, pcells, psize, cell_start, cell_pl, block_start,
-                  full, neigh, n_cells, n_blocks, fan), block_ids
+                  full, n_cells, n_blocks, fan)
 
 
 class Workspace(NamedTuple):
-    """The mutable state of one kernel run.
+    """The mutable state of one search.
 
-    Allocated fresh at every kernel entry and never stored on the Solver.
-    That is deliberate and load-bearing: it is what makes a second
-    `solve()` on the same Solver produce bit-identical output without any
-    reset discipline, and what makes abandoning the generator part-way
-    (itertools.islice) leak nothing.
+    Allocated when a solver.solve_rows generator starts and owned by it
+    alone, so two searches never share state and abandoning one part-way
+    (itertools.islice) leaks nothing.
     """
     occ: np.ndarray       # (NW,) uint64   -- cells filled at the current node
     used: np.ndarray      # (1,)  uint64   -- blocks placed at the current node
@@ -384,56 +363,11 @@ def _cell_count(t, c, occ, used, nw, cnt, stamp, stamp_id):
 
 
 @njit(cache=True)
-def _pocket_score(t, gid, occ, nw):
-    """Empty cells that placing `gid` would strand: cells left empty with
-    every neighbour filled. Nothing can ever cover one, so a candidate
-    that makes them is a dead end one ply early."""
-    dead = 0
-    for c in range(t.n_cells):
-        w, b = c >> 6, c & 63
-        if occ[w] & BIT[b] != _U0 or t.pmask[gid, w] & BIT[b] != _U0:
-            continue  # cell is filled, or about to be
-        blocked = True
-        for v in range(nw):
-            if t.neigh[c, v] & ~(occ[v] | t.pmask[gid, v]) != _U0:
-                blocked = False
-                break
-        if blocked:
-            dead += 1
-    return dead
-
-
-@njit(cache=True)
-def _fanout_score(t, gid, occ, used, nw):
-    """Live placements left for the first cell still empty after `gid`
-    goes down. Fewer means the branch is closer to forced."""
-    used = used | BIT[t.pblock[gid]]  # gid's own block is placed too
-    n_after = 0
-    for c in range(t.n_cells):
-        w, b = c >> 6, c & 63
-        if occ[w] & BIT[b] != _U0 or t.pmask[gid, w] & BIT[b] != _U0:
-            continue
-        for i in range(t.cell_start[c], t.cell_start[c + 1]):
-            g2 = t.cell_pl[i]
-            if used & BIT[t.pblock[g2]] != _U0:
-                continue
-            ok = True
-            for v in range(nw):
-                if t.pmask[g2, v] & (occ[v] | t.pmask[gid, v]) != _U0:
-                    ok = False
-                    break
-            if ok:
-                n_after += 1
-        return n_after
-    return n_after
-
-
-@njit(cache=True)
 def rank(t, cands, n, occ, used, rule, priority, cnt, stamp, stamp_id, key, idx):
     """Sort `cands[:n]` in place, best first.
 
     One implementation for both branch kinds, and it never learns which
-    it was handed: every rule below keys off a *placement*, not off the
+    it was handed: the key is a property of a *placement*, not of the
     item the node branched on. That is what makes the `order` option
     uniform across cell and block branches for free.
 
@@ -476,10 +410,6 @@ def rank(t, cands, n, occ, used, rule, priority, cnt, stamp, stamp_id, key, idx)
                     key[i, b + 1] = key[i, b]
                     b -= 1
                 key[i, b + 1] = v
-        elif rule == RANK_POCKETS:
-            key[i, 0] = _pocket_score(t, gid, occ, nw)
-        elif rule == RANK_FANOUT:
-            key[i, 0] = _fanout_score(t, gid, occ, used, nw)
         key[i, width - 1] = priority[gid]
 
     # Insertion sort over the permutation, comparing key rows. n is the

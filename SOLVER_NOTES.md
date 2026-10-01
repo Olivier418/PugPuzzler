@@ -45,7 +45,7 @@ Full enumeration of each book, and a fixed solution count on the empty boards:
 uncoverable cell until some block runs out of room, so with little pre-filled
 there is almost nothing to prune: worst book puzzle measured is
 `main_puzzles/65` at 2 s against 0.01 s, and on the *empty* main board it finds
-no solution at all in 30 s. `tests/test_branching.py` keeps it off open boards
+no solution at all in 30 s. `tests/test_solver.py` keeps it off open boards
 for that reason.
 
 **What makes MRV affordable** is the `cap` argument to `_count_cell` /
@@ -71,9 +71,33 @@ So it is an option, defaulting to on exactly when `time_limit` or
 worth paying for.
 
 One implementation (`kernel.rank`) serves both branch kinds, and it is never
-told which it was handed: every rule keys off a *placement*, not off the item
-the node branched on. That is why `order` behaves identically under all three
-`branch` modes, with nothing to keep in sync.
+told which it was handed: the key is a property of a *placement*, not of the
+item the node branched on. That is why `order` behaves identically under all
+three `branch` modes, with nothing to keep in sync.
+
+**Removed 2026-09-28: two more ranking rules.** `"pockets"` ranked a candidate
+by how many empty cells it would strand with no empty neighbour (rejecting a
+dead branch one ply early; it needed a per-cell adjacency table, `Tables.neigh`),
+and `"fanout"` by how many options it left for the next empty cell. Benchmarked
+on the six empty boards, 15 trials of ~15 s each per rule (`benchmark.py`,
+throughput in solutions/s pooled over trials, and median time to the first
+solution):
+
+| board | counts (`True`) | `False` | pockets | fanout |
+|---|---|---|---|---|
+| IQpuzzler `empty_main` | 3370 / 4.9 ms | **4487** / 9.2 ms | 4190 / 9.8 ms | 4118 / 10.5 ms |
+| IQpuzzler `empty_pyramid` | 374 / 91 ms | **490** / 12 ms | 478 / 12 ms | 444 / 66 ms |
+| PRO `empty_alt` | **4196** / 15 ms | 4073 / 10 ms | 3894 / 11 ms | 3734 / 8.4 ms |
+| PRO `empty_main` | 3062 / 14 ms | 4460 / 8.8 ms | 4299 / 9.3 ms | **5062** / 5.9 ms |
+| PRO `empty_pyramid` | 252 / 22 ms | 248 / 18 ms | 224 / 20 ms | **336** / 345 ms |
+| IQquub `empty_cube` | 20 / 58 ms | **37** / 32 ms | 35 / 35 ms | 34 / 19 ms |
+
+No rule wins on every board, and plain table order (`False`) is best or close
+on most, so the two extra rules weren't worth their ~60 lines of kernel. Note
+that `counts` — what `order=None` picks when a limit is set — is also the
+slowest on four of the six by throughput; the default may deserve a second
+look. The trials are still in `benchmarks/` (config folders `order=pockets`,
+`order=fanout`).
 
 ---
 

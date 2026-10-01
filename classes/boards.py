@@ -1,44 +1,43 @@
-import numpy as np
+import itertools
+from functools import cached_property
 
-from .lattice import Lattice
+import numpy as np
 
 
 class Board:
+    """A board's cells (bool array, True = a cell) and the geometry of its
+    axes: `offset_adjacency[i, j]` says whether axes i and j are offset by
+    half a cell from each other (e.g. a pyramid's layers) rather than
+    orthogonal. Every offset pattern on at most 3 axes is a valid lattice;
+    beyond 3 some aren't, which nothing here checks."""
+
     def __init__(self, cells: np.ndarray, offset_adjacency: np.ndarray):
         self.cells = np.asarray(cells, dtype=bool)
-        self.lattice = Lattice(offset_adjacency)
-        if self.lattice.ndim != self.cells.ndim:
-            raise ValueError(
-                f"offset_adjacency describes {self.lattice.ndim} axes, but cells has "
-                f"{self.cells.ndim} dimensions; they must match."
-            )
-        self.ndim = self.cells.ndim
-        self.shape = self.cells.shape
+        self.offset_adjacency = np.asarray(offset_adjacency, dtype=bool)
+
+    @cached_property
+    def gram2(self) -> np.ndarray:
+        """Twice the Gram matrix of the axes' unit vectors, in integers: 2 on
+        the diagonal, 1 between offset axes, 0 between orthogonal ones."""
+        return 2 * np.eye(self.cells.ndim, dtype=int) + self.offset_adjacency.astype(int)
+
+    @cached_property
+    def unit_vectors(self) -> list[np.ndarray]:
+        """Every vector v in {-1, 0, 1}^ndim of unit length (v @ gram2 @ v ==
+        2): every direction a block's cells can step in on this board."""
+        vectors = (np.array(v) for v in itertools.product((-1, 0, 1), repeat=self.cells.ndim))
+        return [v for v in vectors if v @ self.gram2 @ v == 2]
 
 
 class RegularBoard(Board):
-    def __init__(
-        self,
-        cells: np.ndarray = None,
-        width: int = None,
-        depth: int = None,
-        height: int = None,
-    ):
-        if cells is not None:
-            cells = np.asarray(cells)
-            if cells.ndim not in (2, 3):
-                raise ValueError(f"cells must be 2D or 3D, got {cells.ndim}D.")
-        elif width is not None and depth is not None:
-            shape = (width, depth) if height is None else (width, depth, height)
-            cells = np.ones(shape, dtype=bool)
-        else:
-            raise ValueError(
-                "Either 'cells' or both 'width' and 'depth' must be provided."
-            )
+    """An orthogonal board: the given `cells`, or a full width x depth
+    (x height) box."""
 
-        # Match offset_adjacency shape dynamically to the number of dimensions (2x2 or 3x3)
-        offset_adjacency = np.zeros((cells.ndim, cells.ndim), dtype=bool)
-        super().__init__(cells, offset_adjacency)
+    def __init__(self, cells: np.ndarray = None, width: int = None, depth: int = None, height: int = None):
+        if cells is None:
+            cells = np.ones((width, depth) if height is None else (width, depth, height), dtype=bool)
+        cells = np.asarray(cells, dtype=bool)
+        super().__init__(cells, np.zeros((cells.ndim, cells.ndim), dtype=bool))
 
 
 class PyramidBoard(Board):

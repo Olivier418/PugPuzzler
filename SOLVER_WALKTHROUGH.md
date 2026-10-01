@@ -28,8 +28,8 @@ Everything in both files is built from these. Get them and the rest follows.
 
 | term | what it is | example on `main_puzzles/45` |
 |---|---|---|
-| **cell index** | `0 .. n_cells-1`, a compact index into the board's real cells (no off-board padding). Same indexing `State.grid` uses. | `n_cells = 55` |
-| **block position** | `0 .. n_blocks-1`. The kernel's own numbering of blocks. **Not** the `Block` key your JSON uses — `solver.block_ids[pos]` translates. | `n_blocks = 12`, `block_ids = [0..11]` |
+| **cell index** | `0 .. n_cells-1`, a compact index into the board's real cells (no off-board padding). Same indexing `Puzzle.grid` uses. | `n_cells = 55` |
+| **block position** | `0 .. n_blocks-1`: the block's key in the Setup's `BlockCollection` (the order of `blocks.json`), used as is — also its column in a solution row. | `n_blocks = 12` |
 | **global id (`gid`)** | One specific placement: one block, in one orientation, at one spot. Numbered `0 .. n_total-1`. | `n_total = 1789` |
 | **`occ`** | `uint64[NW]`. Bit *c* set = cell *c* is filled. | start: `0x47ffffff`, 28 of 55 cells |
 | **`used`** | one `uint64`. Bit *p* set = block position *p* is placed. | start: `0b001100010111`, 6 of 12 |
@@ -43,7 +43,7 @@ pos            = pblock[gid]              # which block
 local index    = gid - block_start[pos]   # which of that block's placements
 ```
 
-That local index is exactly what `State.place_unchecked(block_key, local_idx)`
+That local index is exactly what `Puzzle.place_unchecked(pos, local_idx)`
 wants, which is how a solution gets rebuilt (§6).
 
 **A worked placement.** `gid = 0` is block position 0, covering cells
@@ -77,7 +77,6 @@ search.
 | `cell_start`, `cell_pl` | `(56,)`, `(8259,)` int32 | **CSR list**: the placements covering cell *c* are `cell_pl[cell_start[c] : cell_start[c+1]]`. Cell 0 has 41 of them, starting `[0, 30, 60, 96, ...]`. |
 | `block_start` | `(13,)` int64 | the run boundaries above |
 | `full` | `(1,)` uint64 | all `n_cells` bits set = `0x007fffffffffffff`. A board equal to this is solved. |
-| `neigh` | `(55, 1)` uint64 | `neigh[c]` = c's neighbouring cells as bits. Only `order="pockets"` uses it. |
 | `n_cells`, `n_blocks` | int | 55, 12 |
 | `fan` | int | widest candidate list, `max(cell degree, block run)` = 264. A block branch's list is a whole block run, so both kinds fit the same buffers. |
 
@@ -89,10 +88,9 @@ list of arrays).
 
 ## 3. `kernel.Workspace` — one search's mutable state
 
-Built by `make_workspace()` **fresh at every kernel entry**, never stored on the
-Solver. That is deliberate: it is why running `solve()` twice on the same
-`Solver` gives byte-identical output with no reset logic, and why abandoning the
-generator half-way (`itertools.islice`) leaks nothing.
+Built by `make_workspace()` when a `solve_rows()` generator starts, and owned by
+that generator alone: two searches never share state, and abandoning one
+half-way (`itertools.islice`) leaks nothing.
 
 The stack is indexed by **depth** = how many blocks we have placed so far.
 
@@ -258,18 +256,20 @@ collector calls this. **Do not write a second copy of it** — see §8.
 ### `rank(...)`
 
 Sorts a candidate list in place, best first. One implementation serves both
-branch kinds, and it is never told which it was handed: every key below is a
-property of a **placement**, not of the item the node branched on. That is the
-whole mechanism behind "`order` works the same for cells and blocks" — there is
+branch kinds, and it is never told which it was handed: the key is a property
+of a **placement**, not of the item the node branched on. That is the whole
+mechanism behind "`order` works the same for cells and blocks" — there is
 nothing to keep in sync, because there is only one code path.
 
 | `order=` | key |
 |---|---|
-| `True` / `"counts"` | each candidate's cells' live-placement counts, sorted and compared like a tuple |
-| `"pockets"` | how many empty cells it would strand with no empty neighbour |
-| `"fanout"` | how many options it leaves for the next cell |
+| `True` | each candidate's cells' live-placement counts, sorted and compared like a tuple |
 | `False` | table order — or, if seeded, by the random priority alone |
-| `None` | on iff a limit is set |
+| `None` | `True` iff a limit is set |
+
+(Two more keys, `"pockets"` — empty cells stranded — and `"fanout"` — options
+left for the next cell — were benchmarked on the six empty boards and removed
+2026-09-28: no rule won on every board, and `False` was as good as any on most.)
 
 Every key ends with `priority[gid]`, a permutation, so no two candidates ever
 compare equal. That totality is what makes a seeded run reproducible: without
@@ -285,24 +285,21 @@ increments — it must be unique across the **whole run**, not per call, because
 
 ---
 
-## 6. `solver.Solver` — the Python side
+## 6. `solver.solve_rows` — the Python side
 
-### `solve()` top to bottom
+### `solve_rows()` top to bottom
 
-`Solver` is thin — it owns the objects the kernel cannot see, and the generator
-contract. Nothing else.
+`solve_rows(puzzle, ...)` is a thin generator (`Puzzle.solve_rows` calls it) —
+it owns what the kernel cannot see: the Puzzle, the options, the clock and the
+generator contract. Nothing else.
 
 1. **Resolve `branch` and `order`** into integer rule codes (`_resolve_rules`).
 2. **Draw priorities.** A local `priority`, one per placement: `np.arange`
    unseeded, `rng.permutation` seeded.
-3. **Build the start position** (`_start`). Walk `state.grid` for filled cells
+3. **Build the start position** (`_start`). Walk `puzzle.grid` for filled cells
    → `occ0`; mark every already-placed block in `used0`, which is how a
    Puzzle's pre-filled letters are excluded from the search.
 4. **Allocate one `Workspace`** and run the chunking loop below.
-
-Steps 1-4 and the loop live in `_chunks()`, which both public generators share:
-`solve()` turns each path into a `State` (`_emit`), `solve_rows()` into a bare
-row of placement indices (below).
 
 ### The chunking loop
 
@@ -313,49 +310,41 @@ while True:
     if n_sol:
         take = min(n_sol, max_solutions - found)
         found += take
-        yield w.sol_buf[:take, :w.sol_len[0]].copy()   # one chunk of gid paths
-        if take < n_sol: return False                  # max_solutions cut it short
+        yield from rows(w.sol_buf[:take, :w.sol_len[0]])   # one chunk of gid paths, as rows (below)
+        if take < n_sol: return False                            # max_solutions cut it short
     if status == DONE: return True
     if found >= max_solutions: return False
 ```
 
 Every solution of a puzzle places the same blocks, so all paths in a chunk have
 the same length. The generator's return value says whether the search ran to
-the end; `solve()` and `solve_rows()` pass it on as their own (through `_each`,
-since a plain `for` loop would drop it), and it becomes `SolveStats.complete`.
+the end, and it becomes `SolveStats.complete`.
 
 **The kernel is never told `max_solutions`.** It gets a buffer cap and a node
 budget; all counting stays in Python. That is what keeps the generator lazy: a
 consumer that stops after three solutions costs three solutions' worth of work,
 not a whole enumeration.
 
-`_next_budget` keeps an EMA of nodes/second and asks for ~2 ms of work. That
+An EMA of nodes/second (`rate`) sizes each budget to ~2 ms of work. That
 bounds how far `time_limit` can overshoot (~2 ms) and costs ~0.25% in dispatch.
-The EMA persists across `solve()` calls deliberately: a chunk boundary changes
-*where the kernel returns*, never the order it visits nodes, so it cannot affect
-output.
+A chunk boundary changes *where the kernel returns*, never the order it visits
+nodes, so the budget cannot affect output.
 
-### `_emit(path)` — gids back into a `State`
+### Gids into rows
 
-```python
-for gid in path:
-    pos = pblock[gid]
-    solution.place_unchecked(block_ids[pos], gid - block_start[pos])
-```
+Vectorised per chunk: `pos = pblock[paths]`, and `paths - block_start[pos]` is
+written into each row at column `pos` (`np.put_along_axis`) on top of `base`,
+a row holding the pre-placed blocks' placements. A row is every block's
+placement index in block order. The rows are a fresh array, so the kernel
+reusing `sol_buf` on re-entry can't touch rows already yielded.
 
-`place_unchecked` writes the grid **and** `chosen_placement_idx` together, so a
-yielded solution can never have one without the other. That is precisely what
-`tests/_helpers.assert_valid_solution` cross-checks.
+### Rows into Puzzles, outside the solver
 
-### `solve_rows()` — gids into rows, no `State`
-
-The same chunks, vectorised per chunk instead of replayed per solution:
-`pos = pblock[chunk]`, and `chunk - block_start[pos]` is written into each row
-at column `pos` (`np.put_along_axis`) on top of a base row holding the
-pre-placed blocks' placements. A row is every block's placement index in
-`block_ids` order. Skipping the `State` is worth ~12% of throughput on a full
-enumeration, which is why everything that only times or counts uses it
-(`solving.timed_solve`, `benchmark.py`); `Setup.rows_to_grids` rebuilds grids
+`Puzzle.solved_copy(row)` turns a row into a fully placed copy, calling
+`place_unchecked` for every still-unplaced block. `place_unchecked` writes the
+grid **and** `chosen_placement_idx` together, so a solved copy can never have
+one without the other. Everything that only times or counts never builds one
+(`solving.timed_solve`, `benchmark.py`); `Setup.rows_to_grids` builds grids
 from rows when they are wanted.
 
 ---
@@ -418,7 +407,7 @@ Four things that are load-bearing and non-obvious.
 **Debug it as plain Python.** This is the single most useful thing here:
 
 ```bash
-NUMBA_DISABLE_JIT=1 python -m unittest tests.test_branching.TestPentominoes
+NUMBA_DISABLE_JIT=1 python -m unittest tests.test_solver.TestSolver.test_pentominoes
 ```
 
 Every `@njit` becomes an ordinary function. `pdb` works, exceptions have real
@@ -440,13 +429,13 @@ K.kernel = spy
 
 ```python
 for b in ("cell", "block", "both"):
-    print(b, sum(1 for _ in puzzle.solve(branch=b)))
+    print(b, sum(1 for _ in puzzle.solve_rows(branch=b)))
 ```
 
-**The regression check that matters.** Capture `sorted(s.grid.tobytes() for s
-in Solver(p).solve(**mode))` for every book puzzle in both games under every
+**The regression check that matters.** Capture `sorted(map(tuple,
+p.solve_rows(**mode)))` for every book puzzle in both games under every
 `branch` x `order` combination, and diff against the same capture from the
-previous solver. 221 puzzles x 14 modes is a couple of minutes and is how every
+previous solver. 221 puzzles x 6 modes is a couple of minutes and is how every
 change to the kernel has been verified.
 
 ---
@@ -459,7 +448,7 @@ If you read in this order it should build up cleanly:
 2. `kernel._live`, `collect_cell`, `_count_cell` — three short functions
 3. `kernel.kernel` — the loop, with §4 beside it
 4. `kernel.choose_item` + `rank` — the two decisions, with §5 beside it
-5. `solver.solve` + `_start` + `_emit` — the Python wrapper
+5. `solver.solve_rows` + `_start` — the Python wrapper
 
 Skip §5 on a first pass. The solver is correct and complete without any of it —
 `choose_item` and `rank` only decide speed and ordering, never the answer.
