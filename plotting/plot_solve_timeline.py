@@ -6,101 +6,82 @@ from matplotlib.patches import Rectangle
 
 from classes import Puzzle, SolveStats
 from constants import BOUND_COLORS, DIFFICULTY_COLORS
-from .plot_puzzle_stats import difficulty_color, legend_entries, solved_puzzles, style_2d
+from .plot_puzzle_stats import difficulty_color, solved_puzzles, style_2d
 
 
-def plot_solve_timeline(puzzles: Mapping[str, Puzzle], stats: Mapping[str, SolveStats], ax: plt.Axes = None) -> plt.Axes:
-    """Timeline plot: one column per puzzle, y = time (log scale). A thin
-    gray horizontal line marks every solution found; the first solution
-    for each puzzle is drawn thicker, in the puzzle's difficulty color.
-    Puzzle names (x tick labels) are colored by difficulty, and columns
-    are visually grouped into bands by difficulty with small gaps
-    between groups. A faint, difficulty-colored rectangle behind each
+def plot_solve_timeline(puzzles: Mapping[str, Puzzle], stats: Mapping[str, SolveStats]) -> plt.Figure:
+    """Timeline plot: one row per difficulty (the game's tiers, then the
+    bounds' tags), one column per puzzle, y = time (log scale, shared by
+    every row). A thin gray horizontal line marks every solution found;
+    the first solution for each puzzle is drawn thicker, in the puzzle's
+    difficulty color. A faint, difficulty-colored rectangle behind each
     column's lines spans the full time the solver ran on that puzzle
     (stats[name].duration) -- not just the window between its first and
     last solution, since the solver may keep searching after the last
-    solution was already found.
+    solution was already found. Every row starts at the left edge and
+    spans as many column slots as the largest tier, so all columns are
+    the same width and line up across rows; within a row, puzzles keep
+    the order they have in `stats` (e.g. their source JSON's), rather
+    than names sorted as strings ("10" before "2").
 
     Timing (duration/elapsed) comes from `stats`. Difficulty is read off
     each puzzle, found by name in `puzzles` (any mapping covering every
     puzzle in `stats`, e.g. the PuzzleBook from load_run_books or the book that
-    was solved); colors and legend are plot_puzzle_stats'.
+    was solved); colors are plot_puzzle_stats'.
     """
     if not stats:
         raise ValueError("plot_solve_timeline needs at least one solved puzzle.")
     difficulty_by_name = {p.name: p.difficulty for p in solved_puzzles(puzzles, stats)}
-    names = list(stats)
 
-    # order columns: group by difficulty (the game's tiers, then the bounds'
-    # tags); within a group, preserve the original order the puzzles appear
-    # in `stats` (e.g. the order they were listed in the source JSON)
-    # rather than sorting by name -- sorting names as strings would put
-    # "10" before "2".
     difficulty_order = {d: i for i, d in enumerate(DIFFICULTY_COLORS | BOUND_COLORS)}
-    names.sort(key=lambda name: difficulty_order.get(difficulty_by_name[name], len(difficulty_order)))
+    rows: dict[str | None, list[str]] = {}
+    for name in sorted(stats, key=lambda n: difficulty_order.get(difficulty_by_name[n], len(difficulty_order))):
+        rows.setdefault(difficulty_by_name[name], []).append(name)
+    n_slots = max(map(len, rows.values()))
 
-    if ax is None:
-        _, ax = plt.subplots(figsize=(0.6 * len(names) + 2, 6))
-    # plot_puzzle_stats' look, minus what a row of columns doesn't need:
-    # the bottom spine, x tick marks and vertical grid lines
-    style_2d(ax)
-    ax.spines["bottom"].set_visible(False)
-    ax.tick_params(axis="x", length=0)
-    ax.grid(False, axis="x")
-
-    col_width = 0.6
-    group_gap = 0.6  # extra horizontal space inserted between difficulty groups
-
-    x_positions = []
-    x = 0.0
-    prev_difficulty = None
-    for name in names:
-        difficulty = difficulty_by_name[name]
-        if prev_difficulty is not None and difficulty != prev_difficulty:
-            x += group_gap
-        x_positions.append(x)
-        prev_difficulty = difficulty
-        x += 1.0
+    fig, axes = plt.subplots(len(rows), 1, sharey=True, squeeze=False,
+                             figsize=(0.45 * n_slots + 2, 1.9 * len(rows) + 0.8))
 
     # tiny epsilon so a solution found at elapsed == 0 is still visible
     # on a log-scaled y axis
-    all_times = [t for name in names for t in stats[name].elapsed]
-    positive_times = [t for t in all_times if t > 0]
+    positive_times = [t for s in stats.values() for t in s.elapsed if t > 0]
     eps = min(positive_times) / 10 if positive_times else 1e-3
+    col_width = 0.6
 
-    for name, x in zip(names, x_positions):
-        color = difficulty_color(difficulty_by_name[name])
-        times = sorted(max(t, eps) for t in stats[name].elapsed)
+    for ax, (difficulty, names) in zip(axes[:, 0], rows.items()):
+        color = difficulty_color(difficulty)
+        # plot_puzzle_stats' look, minus what a row of columns doesn't need:
+        # the bottom spine, x tick marks and vertical grid lines
+        style_2d(ax)
+        ax.spines["bottom"].set_visible(False)
+        ax.tick_params(axis="x", length=0)
+        ax.grid(False, axis="x")
 
-        duration = max(stats[name].duration, eps)
-        ax.add_patch(Rectangle(
-            (x - col_width / 2, eps), col_width, duration - eps,
-            facecolor=color, edgecolor="none", alpha=0.15, zorder=1,
-        ))
+        for x, name in enumerate(names):
+            times = sorted(max(t, eps) for t in stats[name].elapsed)
+            duration = max(stats[name].duration, eps)
+            ax.add_patch(Rectangle(
+                (x - col_width / 2, eps), col_width, duration - eps,
+                facecolor=color, edgecolor="none", alpha=0.15, zorder=1,
+            ))
+            # first solution thick in the puzzle's color, the rest thin gray
+            xmin, xmax = x - col_width / 2, x + col_width / 2
+            ax.hlines(times[1:], xmin, xmax, color="#BBBBBB", linewidth=0.8, zorder=2)
+            ax.hlines(times[:1], xmin, xmax, color=color, linewidth=2.2, zorder=3)
 
-        # first solution thick in the puzzle's color, the rest thin gray
-        xmin, xmax = x - col_width / 2, x + col_width / 2
-        ax.hlines(times[1:], xmin, xmax, color="#BBBBBB", linewidth=0.8, zorder=2)
-        ax.hlines(times[:1], xmin, xmax, color=color, linewidth=2.2, zorder=3)
+        ax.set_xticks(range(len(names)))
+        ax.set_xticklabels(names, color=color)
+        ax.set_xlim(-0.7, n_slots - 0.3)
+        ax.set_yscale("log")
+        ax.set_title(difficulty if difficulty is not None else "no difficulty",
+                     loc="left", fontsize=10, color=color)
 
-    # x ticks: puzzle names, colored by difficulty
-    ax.set_xticks(x_positions)
-    ax.set_xticklabels(names, rotation=30, ha="right", rotation_mode="anchor")
-    for tick_label, name in zip(ax.get_xticklabels(), names):
-        tick_label.set_color(difficulty_color(difficulty_by_name[name]))
-
-    ax.set_xlim(x_positions[0] - 1, x_positions[-1] + 1)
-    ax.set_yscale("log")
-    ax.set_ylabel("Time to solution (s)")
-
-    handles = [
-        Line2D([0], [0], color=color, linewidth=2.2, label=difficulty)
-        for difficulty, color in legend_entries(list(difficulty_by_name.values())).items()
-    ]
-    if handles:
-        ax.legend(handles=handles, title="Difficulty (1st solution)", frameon=False,
-                  loc="upper left", bbox_to_anchor=(1.01, 1.0))
-
-    ax.set_title("Solve timeline per puzzle", fontsize=12, color="#333333")
-    ax.figure.tight_layout()
-    return ax
+    axes[0, 0].legend(
+        handles=[Line2D([0], [0], color="#555555", linewidth=2.2, label="first solution"),
+                 Line2D([0], [0], color="#BBBBBB", linewidth=0.8, label="later solutions")],
+        frameon=False, loc="lower right", bbox_to_anchor=(1.0, 1.0), ncol=2, fontsize=9,
+    )
+    fig.supylabel("Time to solution (s)", fontsize=10, color="#333333")
+    fig.suptitle("Solve timeline per puzzle", fontsize=12, color="#333333")
+    fig.tight_layout()
+    return fig

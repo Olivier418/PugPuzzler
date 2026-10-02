@@ -11,7 +11,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from classes import Puzzle, SolveStats
-from constants import BENCHMARK_DIR
+from constants import BENCHMARK_DIR, TIME_DECIMALS
 from serialization import load_stats, next_run_dir, write_stats
 
 
@@ -172,8 +172,8 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> Solve
     # The worker's own stop overshoots T by up to a solver chunk; a trial is
     # exactly T long, and complete only if the search ended within it.
     complete = bool(worker_complete) and all(e <= T for e in elapsed) and worker_duration <= T
-    elapsed = [e for e in elapsed if e <= T]
-    duration = min(worker_duration if worker_duration is not None else stopped, T)
+    elapsed = [round(e, TIME_DECIMALS) for e in elapsed if e <= T]
+    duration = round(min(worker_duration if worker_duration is not None else stopped, T), TIME_DECIMALS)
 
     return SolveStats(
         puzzle_name=puzzle.name, options=dict(config), seed=seed, duration=duration, complete=complete,

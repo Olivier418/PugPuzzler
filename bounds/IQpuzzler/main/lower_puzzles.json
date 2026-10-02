@@ -1,0 +1,446 @@
+{
+  "board": "main",
+  "puzzles": [
+    {
+      "name": "1",
+      "difficulty": "hardest",
+      "grid": ["           ",
+               "           ",
+               "           ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "2",
+      "difficulty": "hardest",
+      "grid": ["           ",
+               "           ",
+               "           ",
+               "       FF  ",
+               "        F  "]
+    },
+    {
+      "name": "3",
+      "difficulty": "hardest",
+      "grid": ["           ",
+               "           ",
+               "           ",
+               "   AAA     ",
+               "     A     "]
+    },
+    {
+      "name": "4",
+      "difficulty": "hardest",
+      "grid": ["     D     ",
+               "   DDDD    ",
+               "           ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "5",
+      "difficulty": "hardest",
+      "grid": ["A          ",
+               "A          ",
+               "AA         ",
+               "      FF   ",
+               "       F   "]
+    },
+    {
+      "name": "6",
+      "difficulty": "hardest",
+      "grid": ["A          ",
+               "A     J    ",
+               "AA    J    ",
+               "      J    ",
+               "      J    "]
+    },
+    {
+      "name": "7",
+      "difficulty": "hardest",
+      "grid": ["A  B       ",
+               "A  BB      ",
+               "AA BB      ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "8",
+      "difficulty": "hardest",
+      "grid": ["B          ",
+               "BB C       ",
+               "BB C       ",
+               "   C       ",
+               "  CC       "]
+    },
+    {
+      "name": "9",
+      "difficulty": "hardest",
+      "grid": ["A          ",
+               "A          ",
+               "AA  JJJJ   ",
+               "      FF   ",
+               "       F   "]
+    },
+    {
+      "name": "10",
+      "difficulty": "hardest",
+      "grid": ["AFFB       ",
+               "AF BB      ",
+               "AA BB      ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "11",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJ   ",
+               "A  BB      ",
+               "AA BB      ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "12",
+      "difficulty": "hardest",
+      "grid": ["A  B       ",
+               "A  BB      ",
+               "AA BB      ",
+               "   C       ",
+               "CCCC       "]
+    },
+    {
+      "name": "13",
+      "difficulty": "hardest",
+      "grid": ["A          ",
+               "A          ",
+               "AA  JJJJ   ",
+               "KK    FF   ",
+               "KK     F   "]
+    },
+    {
+      "name": "14",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BB      ",
+               "AA BB      ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "15",
+      "difficulty": "hardest",
+      "grid": ["AFFB       ",
+               "AF BB      ",
+               "AA BB      ",
+               "   C       ",
+               "CCCC       "]
+    },
+    {
+      "name": "16",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJ   ",
+               "A  BB      ",
+               "AA BB      ",
+               "   C       ",
+               "CCCC       "]
+    },
+    {
+      "name": "17",
+      "difficulty": "hardest",
+      "grid": ["A  B       ",
+               "A  BB      ",
+               "AA BB      ",
+               "   C  D    ",
+               "CCCC DDDD  "]
+    },
+    {
+      "name": "18",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BB      ",
+               "AA BB      ",
+               "         KK",
+               "         KK"]
+    },
+    {
+      "name": "19",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BB      ",
+               "AA BB      ",
+               "   C       ",
+               "CCCC       "]
+    },
+    {
+      "name": "20",
+      "difficulty": "hardest",
+      "grid": ["AFFB       ",
+               "AF BB      ",
+               "AA BB      ",
+               "   C  D    ",
+               "CCCC DDDD  "]
+    },
+    {
+      "name": "21",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJ   ",
+               "A  BB      ",
+               "AA BB      ",
+               "   C  D    ",
+               "CCCC DDDD  "]
+    },
+    {
+      "name": "22",
+      "difficulty": "hardest",
+      "grid": ["A  B       ",
+               "A  BBE     ",
+               "AA BBE     ",
+               "   CEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "23",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BB      ",
+               "AA BB      ",
+               "   C     KK",
+               "CCCC     KK"]
+    },
+    {
+      "name": "24",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BB      ",
+               "AA BB      ",
+               "   C  D    ",
+               "CCCC DDDD  "]
+    },
+    {
+      "name": "25",
+      "difficulty": "hardest",
+      "grid": ["AFFB       ",
+               "AF BBE     ",
+               "AA BBE     ",
+               "   CEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "26",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJ   ",
+               "A  BBE     ",
+               "AA BBE     ",
+               "   CEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "27",
+      "difficulty": "hardest",
+      "grid": ["A  B       ",
+               "A GBBE     ",
+               "AAGBBE     ",
+               "GGGCEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "28",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BB      ",
+               "AA BB      ",
+               "   C  D  KK",
+               "CCCC DDDDKK"]
+    },
+    {
+      "name": "29",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BBE     ",
+               "AA BBE     ",
+               "   CEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "30",
+      "difficulty": "hardest",
+      "grid": ["AFFB       ",
+               "AFGBBE     ",
+               "AAGBBE     ",
+               "GGGCEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "31",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJ   ",
+               "A GBBE     ",
+               "AAGBBE     ",
+               "GGGCEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "32",
+      "difficulty": "hardest",
+      "grid": ["A  B       ",
+               "A GBBEH    ",
+               "AAGBBEHH   ",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "33",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AF BBE     ",
+               "AA BBE     ",
+               "   CEED  KK",
+               "CCCCEDDDDKK"]
+    },
+    {
+      "name": "34",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AFGBBE     ",
+               "AAGBBE     ",
+               "GGGCEED    ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "35",
+      "difficulty": "hardest",
+      "grid": ["AFFB       ",
+               "AFGBBEH    ",
+               "AAGBBEHH   ",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "36",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJ   ",
+               "A GBBEH    ",
+               "AAGBBEHH   ",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "37",
+      "difficulty": "hardest",
+      "grid": ["A  B     II",
+               "A GBBEH   I",
+               "AAGBBEHH II",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "38",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AFGBBE     ",
+               "AAGBBE     ",
+               "GGGCEED  KK",
+               "CCCCEDDDDKK"]
+    },
+    {
+      "name": "39",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AFGBBEH    ",
+               "AAGBBEHH   ",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "40",
+      "difficulty": "hardest",
+      "grid": ["AFFB     II",
+               "AFGBBEH   I",
+               "AAGBBEHH II",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "41",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJ II",
+               "A GBBEH   I",
+               "AAGBBEHH II",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "42",
+      "difficulty": "hardest",
+      "grid": ["A  B    LII",
+               "A GBBEHLLLI",
+               "AAGBBEHHLII",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "43",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ   ",
+               "AFGBBEH    ",
+               "AAGBBEHH   ",
+               "GGGCEEDHHKK",
+               "CCCCEDDDDKK"]
+    },
+    {
+      "name": "44",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ II",
+               "AFGBBEH   I",
+               "AAGBBEHH II",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "45",
+      "difficulty": "hardest",
+      "grid": ["AFFB    LII",
+               "AFGBBEHLLLI",
+               "AAGBBEHHLII",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "46",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJLII",
+               "A GBBEHLLLI",
+               "AAGBBEHHLII",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "47",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJ II",
+               "AFGBBEH   I",
+               "AAGBBEHH II",
+               "GGGCEEDHHKK",
+               "CCCCEDDDDKK"]
+    },
+    {
+      "name": "48",
+      "difficulty": "hardest",
+      "grid": ["AFFBJJJJLII",
+               "AFGBBEHLLLI",
+               "AAGBBEHHLII",
+               "GGGCEEDHH  ",
+               "CCCCEDDDD  "]
+    },
+    {
+      "name": "49",
+      "difficulty": "hardest",
+      "grid": ["A  BJJJJLII",
+               "A GBBEHLLLI",
+               "AAGBBEHHLII",
+               "GGGCEEDHHKK",
+               "CCCCEDDDDKK"]
+    }
+  ]
+}

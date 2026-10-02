@@ -7,6 +7,9 @@ read into a Game -- and the one thing ever written there, a new book
   games/<Game>/books/<book>.json   {"board": key, "puzzles": [{"name", "difficulty", "grid"}, ...]}
   games/<Game>/puzzles/<name>.json {"board": key, "difficulty", "grid"}
 
+A puzzle file in that last format can also live anywhere else and be read
+with load_puzzle onto a loaded Game (e.g. tutorial/demo_puzzle.json).
+
 A grid is letter rows (see jsonio.parse_letter_grid); "difficulty" and
 "grid" are optional. Names are never read from a JSON "name" field except
 for puzzles inside a book file: Game.name is the folder's, a PuzzleBook's
@@ -164,6 +167,16 @@ def load_standalone_puzzles(game_dir: Path | str, setups: dict[str, Setup]) -> l
         puzzle.source = Source(game_name=game_dir.name, puzzle_name=puzzle.name)
         puzzles.append(puzzle)
     return puzzles
+
+
+def load_puzzle(json_file: Path | str, game: Game) -> Puzzle:
+    """A puzzle file kept outside games/ (same format as games/<game>/puzzles/*.json),
+    on `game`'s Setup for its board and named after the file. It has no Source,
+    so it can be solved and shown but its runs can't be saved."""
+    json_file = Path(json_file)
+    with open(json_file, "r") as f:
+        entry = json.load(f)
+    return _puzzle_from_entry(_setup_for(game.setups, entry, json_file), entry, json_file.stem)
 
 
 def load_game(dir_path: Path | str) -> Game:

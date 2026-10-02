@@ -1,0 +1,446 @@
+{
+  "board": "main",
+  "puzzles": [
+    {
+      "name": "1",
+      "difficulty": "easiest",
+      "grid": ["           ",
+               "           ",
+               "           ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "2",
+      "difficulty": "easiest",
+      "grid": ["         FF",
+               "          F",
+               "           ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "3",
+      "difficulty": "easiest",
+      "grid": ["KK         ",
+               "KK         ",
+               "           ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "4",
+      "difficulty": "easiest",
+      "grid": ["           ",
+               "           ",
+               "          G",
+               "          G",
+               "        GGG"]
+    },
+    {
+      "name": "5",
+      "difficulty": "easiest",
+      "grid": ["JJJJ     FF",
+               "          F",
+               "           ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "6",
+      "difficulty": "easiest",
+      "grid": ["         FF",
+               "         LF",
+               "        LLL",
+               "         L ",
+               "           "]
+    },
+    {
+      "name": "7",
+      "difficulty": "easiest",
+      "grid": ["II         ",
+               "I          ",
+               "II         ",
+               "KK         ",
+               "KK         "]
+    },
+    {
+      "name": "8",
+      "difficulty": "easiest",
+      "grid": ["IIL        ",
+               "ILLL       ",
+               "IIL        ",
+               "           ",
+               "           "]
+    },
+    {
+      "name": "9",
+      "difficulty": "easiest",
+      "grid": ["FF       KK",
+               "JF       KK",
+               "J          ",
+               "J          ",
+               "J          "]
+    },
+    {
+      "name": "10",
+      "difficulty": "easiest",
+      "grid": ["        HFF",
+               "        HHF",
+               "         HH",
+               "         KK",
+               "         KK"]
+    },
+    {
+      "name": "11",
+      "difficulty": "easiest",
+      "grid": ["         FF",
+               "         LF",
+               "        LLL",
+               "        ILI",
+               "        III"]
+    },
+    {
+      "name": "12",
+      "difficulty": "easiest",
+      "grid": ["IIL        ",
+               "ILLL       ",
+               "IIL        ",
+               "KK         ",
+               "KK         "]
+    },
+    {
+      "name": "13",
+      "difficulty": "easiest",
+      "grid": ["        III",
+               "        ILI",
+               "        LLL",
+               "         LC",
+               "       CCCC"]
+    },
+    {
+      "name": "14",
+      "difficulty": "easiest",
+      "grid": ["JJJJ    HFF",
+               "        HHF",
+               "         HH",
+               "         KK",
+               "         KK"]
+    },
+    {
+      "name": "15",
+      "difficulty": "easiest",
+      "grid": ["       KKFF",
+               "       KKLF",
+               "        LLL",
+               "        ILI",
+               "        III"]
+    },
+    {
+      "name": "16",
+      "difficulty": "easiest",
+      "grid": ["IILJJJJ    ",
+               "ILLL       ",
+               "IIL        ",
+               "KK         ",
+               "KK         "]
+    },
+    {
+      "name": "17",
+      "difficulty": "easiest",
+      "grid": ["KK         ",
+               "KKHH       ",
+               "IILHH      ",
+               "ILLLH      ",
+               "IIL        "]
+    },
+    {
+      "name": "18",
+      "difficulty": "easiest",
+      "grid": ["        III",
+               "        ILI",
+               "        LLL",
+               "      EEELC",
+               "     EECCCC"]
+    },
+    {
+      "name": "19",
+      "difficulty": "easiest",
+      "grid": ["       FFKK",
+               "        FKK",
+               "        LII",
+               "       LLLI",
+               "    JJJJLII"]
+    },
+    {
+      "name": "20",
+      "difficulty": "easiest",
+      "grid": ["       KKFF",
+               "       KKLF",
+               "       GLLL",
+               "       GILI",
+               "     GGGIII"]
+    },
+    {
+      "name": "21",
+      "difficulty": "easiest",
+      "grid": ["KK         ",
+               "KKHH       ",
+               "IILHH      ",
+               "ILLLH      ",
+               "IILJJJJ    "]
+    },
+    {
+      "name": "22",
+      "difficulty": "easiest",
+      "grid": ["KK         ",
+               "KKHH       ",
+               "IILHHG     ",
+               "ILLLHG     ",
+               "IILGGG     "]
+    },
+    {
+      "name": "23",
+      "difficulty": "easiest",
+      "grid": ["      HHGGG",
+               "     HHLIIG",
+               "     HLLLIG",
+               "       LIIC",
+               "       CCCC"]
+    },
+    {
+      "name": "24",
+      "difficulty": "easiest",
+      "grid": ["FFEEAAA    ",
+               "JFLEEEA    ",
+               "JLLL       ",
+               "JILI       ",
+               "JIII       "]
+    },
+    {
+      "name": "25",
+      "difficulty": "easiest",
+      "grid": ["      KKIII",
+               "      KKILI",
+               "      HHLLL",
+               "      DHHLF",
+               "    DDDDHFF"]
+    },
+    {
+      "name": "26",
+      "difficulty": "easiest",
+      "grid": ["IILJJJJ    ",
+               "ILLLH      ",
+               "IILHH      ",
+               "KKHHD      ",
+               "KKDDDD     "]
+    },
+    {
+      "name": "27",
+      "difficulty": "easiest",
+      "grid": ["     IILGGG",
+               "     ILLLHG",
+               "     IILHHG",
+               "     EEHHKK",
+               "      EEEKK"]
+    },
+    {
+      "name": "28",
+      "difficulty": "easiest",
+      "grid": ["     LII  D",
+               "    LLLI  D",
+               "    GLIIHDD",
+               "    GEEEHHD",
+               "    GGGEEHH"]
+    },
+    {
+      "name": "29",
+      "difficulty": "easiest",
+      "grid": ["AFFLII     ",
+               "AFLLLI     ",
+               "AAGLII     ",
+               "KKGEEE     ",
+               "KKGGGEE    "]
+    },
+    {
+      "name": "30",
+      "difficulty": "easiest",
+      "grid": ["     IILFFD",
+               "     ILLLFD",
+               "     IILHDD",
+               "     EEEHHD",
+               "   JJJJEEHH"]
+    },
+    {
+      "name": "31",
+      "difficulty": "easiest",
+      "grid": ["    IIIKKEJ",
+               "    ILIKKEJ",
+               "    LLLHEEJ",
+               "     LHHEDJ",
+               "     HHDDDD"]
+    },
+    {
+      "name": "32",
+      "difficulty": "easiest",
+      "grid": ["     LIIKKD",
+               "    LLLIKKD",
+               "    GLIIHDD",
+               "    GEEEHHD",
+               "    GGGEEHH"]
+    },
+    {
+      "name": "33",
+      "difficulty": "easiest",
+      "grid": ["EEDDDDHHGGG",
+               " EEEDHHLIIG",
+               "     HLLLIG",
+               "       LIIC",
+               "       CCCC"]
+    },
+    {
+      "name": "34",
+      "difficulty": "easiest",
+      "grid": ["IILAAA   FF",
+               "ILLLHA    F",
+               "IILDHH     ",
+               "CDDDDHH    ",
+               "CCCCJJJJ   "]
+    },
+    {
+      "name": "35",
+      "difficulty": "easiest",
+      "grid": ["   FFGGGIII",
+               "    FHHGILI",
+               "    HHDGLLL",
+               "    HDDDDLC",
+               "   JJJJCCCC"]
+    },
+    {
+      "name": "36",
+      "difficulty": "easiest",
+      "grid": ["     LIIKKD",
+               "    LLLIKKD",
+               "    GLIIHDD",
+               "    GEEEHHD",
+               "JJJJGGGEEHH"]
+    },
+    {
+      "name": "37",
+      "difficulty": "easiest",
+      "grid": ["   HJJJJGGG",
+               "   HHEEEIIG",
+               "    HHLEEIG",
+               "    DLLLIIC",
+               "  DDDDLCCCC"]
+    },
+    {
+      "name": "38",
+      "difficulty": "easiest",
+      "grid": ["    BBBCCCC",
+               "     BBLIIC",
+               "     HLLLIG",
+               " EEEDHHLIIG",
+               "EEDDDDHHGGG"]
+    },
+    {
+      "name": "39",
+      "difficulty": "easiest",
+      "grid": ["KKJJJJEE   ",
+               "KKHHEEE    ",
+               "IILHHFF    ",
+               "ILLLHDF   C",
+               "IILDDDDCCCC"]
+    },
+    {
+      "name": "40",
+      "difficulty": "easiest",
+      "grid": ["    JJJJLII",
+               "     GHLLLI",
+               "A    GHHLII",
+               "AEEGGGDHHKK",
+               "AAEEEDDDDKK"]
+    },
+    {
+      "name": "41",
+      "difficulty": "easiest",
+      "grid": ["DKKEEGGG   ",
+               "DKKCEEEG   ",
+               "DDHCIILG   ",
+               "DHHCILLL   ",
+               "HHCCIILJJJJ"]
+    },
+    {
+      "name": "42",
+      "difficulty": "easiest",
+      "grid": ["BEEEII    C",
+               "BBGEEI    C",
+               "BBGHIIL   C",
+               "GGGHHLLLDCC",
+               "JJJJHHLDDDD"]
+    },
+    {
+      "name": "43",
+      "difficulty": "easiest",
+      "grid": ["AJJJJL  GGG",
+               "AIIBLLL   G",
+               "AAIBBLKK  G",
+               "FIIBBCKKD  ",
+               "FFCCCCDDDD "]
+    },
+    {
+      "name": "44",
+      "difficulty": "easiest",
+      "grid": ["JEEGGGFF   ",
+               "JCEEEGHF   ",
+               "JCIILGHH   ",
+               "JCILLLDHHKK",
+               "CCIILDDDDKK"]
+    },
+    {
+      "name": "45",
+      "difficulty": "easiest",
+      "grid": ["AHEEGGGJJJJ",
+               "AHHEEEGIIIC",
+               "AAHHKKGILIC",
+               "    KKDLLLC",
+               "    DDDDLCC"]
+    },
+    {
+      "name": "46",
+      "difficulty": "easiest",
+      "grid": ["AGGG  BBBEJ",
+               "AIIG   BBEJ",
+               "AAIGL  HEEJ",
+               "CIILLLHHEDJ",
+               "CCCCLHHDDDD"]
+    },
+    {
+      "name": "47",
+      "difficulty": "easiest",
+      "grid": ["AIIIDEEEGGG",
+               "AIBIDD EEHG",
+               "AABBD   HHG",
+               "KKBBDC HHFF",
+               "KKCCCCJJJJF"]
+    },
+    {
+      "name": "48",
+      "difficulty": "easiest",
+      "grid": ["AIIIDEEEGGG",
+               "AIBIDDLEEHG",
+               "AABBDLLLHHG",
+               "  BBDCLHHFF",
+               "  CCCCJJJJF"]
+    },
+    {
+      "name": "49",
+      "difficulty": "easiest",
+      "grid": ["AIIIDEEEGGG",
+               "AIBIDDLEEHG",
+               "AABBDLLLHHG",
+               "KKBBDCLHH  ",
+               "KKCCCCJJJJ "]
+    }
+  ]
+}

@@ -190,7 +190,16 @@ class Setup:
         per Setup, so repeat calls on any Setup are free."""
         kernel.warmup(self.kernel_tables)
 
-    def render(self, grid: np.ndarray, header: str = None, leftover_idcs=None) -> str:
+    def render(
+        self,
+        grid: np.ndarray,
+        header: str = None,
+        leftover_idcs=None,
+        labels=None,
+        cell_width: int = 2,
+        letters: bool = True,
+        mark: int = None,
+    ) -> str:
         """Build the text representation used by every __repr__ in this
         module: an optional header, then the board, and -- when
         `leftover_idcs` is given -- shape diagrams of those blocks laid
@@ -202,8 +211,21 @@ class Setup:
         `grid` is compact (see __init__); rendering needs the real
         board shape (with OUTSIDE_BOARD filled back in) to draw the
         board's silhouette, so it's expanded here at this one boundary.
+        `labels` (strings drawn in empty cells) is compact too and expanded
+        the same way, and `mark` is a compact cell index; `cell_width` and
+        `letters` pass through as they are (see rendering.grid_lines).
         """
-        return _render(self.board, self.blocks, self.to_full_grid(grid), header=header, leftover_idcs=leftover_idcs)
+        full_labels = None
+        if labels is not None:
+            full_labels = np.full(self.board.cells.size, '', dtype=object)
+            full_labels[self.compact_to_flat] = labels
+            full_labels = full_labels.reshape(self.board.cells.shape)
+        full_mark = None
+        if mark is not None:
+            full_mark = np.unravel_index(self.compact_to_flat[mark], self.board.cells.shape)
+        return _render(self.board, self.blocks, self.to_full_grid(grid), header=header,
+                       leftover_idcs=leftover_idcs, labels=full_labels, cell_width=cell_width,
+                       letters=letters, mark=full_mark)
 
     def to_full_grid(self, grid: np.ndarray) -> np.ndarray:
         """Scatter a compact (n_cells,) grid back into a full board-shaped

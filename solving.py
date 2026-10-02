@@ -13,7 +13,7 @@ import numpy as np
 from tqdm import tqdm
 
 from classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats
-from constants import SOLUTION_DIR
+from constants import SOLUTION_DIR, TIME_DECIMALS
 from serialization import next_run_dir, save_run
 
 
@@ -86,7 +86,7 @@ def timed_solve(
         except StopIteration as done:  # a for loop would drop its value
             complete = done.value
             break
-        elapsed.append(time.perf_counter() - start)
+        elapsed.append(round(time.perf_counter() - start, TIME_DECIMALS))
         bar.update()
         if rows is not None:
             rows.append(row)
@@ -94,7 +94,7 @@ def timed_solve(
             print(puzzle.solved_copy(row, len(elapsed)))
         elif verbose >= Verbosity.EACH_SOLUTION:
             print(f"Found {_ordinal(len(elapsed))} solution to puzzle {puzzle.name} in {elapsed[-1]:.2f}s")
-    duration = time.perf_counter() - start
+    duration = round(time.perf_counter() - start, TIME_DECIMALS)
     bar.close()
 
     if verbose >= Verbosity.SUMMARY:
