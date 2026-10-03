@@ -95,6 +95,6 @@
       [1, 1, 1],
       [0, 1, 0]
     ],
-    "terminal": {"bg": "BLACK", "fg": "WHITE"}
+    "terminal": {"bg": "LIGHTWHITE_EX", "fg": "BLACK"}
   }
 }

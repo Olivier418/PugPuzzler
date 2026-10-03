@@ -1,4 +1,4 @@
-"""A step-by-step view of the solver's branching rule, for tutorial/main.ipynb.
+"""A step-by-step view of the solver's branching rule, for tutorial/1_solver.ipynb.
 
 Every node is computed with the kernel's own primitives (choose_item, the
 live-placement counters and collectors), so what is shown is exactly what
@@ -10,7 +10,6 @@ import re
 from typing import NamedTuple
 
 import numpy as np
-from colorama import Style
 
 from classes import Puzzle
 from classes import kernel
@@ -82,10 +81,6 @@ def walk(puzzle: Puzzle) -> tuple[list[tuple[int, Puzzle, Step]], Puzzle | None]
     return nodes, visit(puzzle, 0)
 
 
-def _colored_letter(block) -> str:
-    return f"{block.terminal_color}{block.letter} {Style.RESET_ALL}"
-
-
 def _side_by_side(panels: list[list[str]], gap: int = 4, per_row: int = 4) -> str:
     """Multi-line strings next to each other, padded by visible width
     (color codes don't count), `per_row` panels to a row."""
@@ -117,10 +112,33 @@ def _placements(n: int) -> str:
     return f"{n} placement" + ("" if n == 1 else "s")
 
 
-def describe(puzzle: Puzzle, step: Step) -> str:
-    """One line naming the item a node branches on and how many branches."""
-    what = "dead end" if step.count == 0 else "forced" if step.count == 1 else f"{step.count} branches"
-    return f"{step.kind:>5}: {_item(puzzle, step)}, {what}"
+def describe(nodes: list[tuple[int, Puzzle, Step]], solved: Puzzle | None) -> str:
+    """The search `walk` returned as a tree indented by depth: per node the
+    item it branches on and how many branches, a dead end or forced move on
+    an extra-indented line of its own, the solution under the node that
+    reaches it, and a closing "..." where the search carries on with
+    branches not yet tried."""
+    lines, untried = [], None
+    for i, (depth, node, step) in enumerate(nodes):
+        indent = "  " * depth
+        head = f"{indent}{_item(node, step)}"
+        # the last node is the solution's parent; every other branch tried is a child node
+        reaches_solution = solved is not None and i == len(nodes) - 1
+        tried = int(reaches_solution)
+        for d, _, _ in nodes[i + 1:]:
+            if d <= depth:
+                break
+            tried += d == depth + 1
+        if tried < step.count:
+            untried = depth
+        if step.count >= 2:
+            lines.append(f"{head}, {step.count} branches")
+        else:
+            what = "dead end" if step.count == 0 else "forced"
+            lines += [head, f"{indent}    {what}" + (" --> *solution!*" if reaches_solution else "")]
+    if untried is not None:  # under the deepest node with branches left: the search goes on there
+        lines.append("  " * (untried + 1) + "...")
+    return "\n".join(lines)
 
 
 def render_cell_counts(puzzle: Puzzle, step: Step) -> str:
@@ -143,23 +161,18 @@ def render_block_counts(puzzle: Puzzle, step: Step) -> str:
 
 
 def render_branches(puzzle: Puzzle, step: Step) -> str:
-    """The item the node branches on -- a cell pointed at on the board, or
-    a block drawn in full -- and every branch as the board it leads to,
-    numbered in the order the search tries them."""
+    """The item the node branches on, and every branch as the board it
+    leads to, numbered in the order the search tries them."""
     setup = puzzle.setup
     if step.kind == "cell":
-        lines = [f"Branching on {_item(puzzle, step)}: {_placements(step.count)} cover{'s' if step.count == 1 else ''} it", "",
-                 setup.render(puzzle.grid, mark=step.index)]
+        lines = [f"Branching on {_item(puzzle, step)}: {_placements(step.count)} cover{'s' if step.count == 1 else ''} it", ""]
     else:
-        shape, _ = block_shape_lines(puzzle.blocks[step.index])
-        lines = [f"Branching on {_item(puzzle, step)}: {_placements(step.count)}", ""] + shape
-    lines.append("")
+        lines = [f"Branching on {_item(puzzle, step)}: {_placements(step.count)}", ""]
 
     panels = []
     for i, (block_idx, placement_idx) in enumerate(step.candidates, 1):
         child = puzzle.copy()
         child.place_unchecked(block_idx, placement_idx)
-        header = f"branch {i}: {_colored_letter(setup.blocks[block_idx])}"
-        panels.append([header, ""] + setup.render(child.grid).split("\n"))
+        panels.append([f"branch {i}", ""] + setup.render(child.grid).split("\n"))
     lines.append(_side_by_side(panels))
     return "\n".join(lines)
