@@ -4,7 +4,7 @@
 
 # PUGpuzzler
 
-**PUGpuzzler** (*Pretty Universal Geometry*) is a solver for polyform-based packing puzzles: given a board and a set of pieces, it finds **every** way to fill the board. It frames the puzzle as an exact cover problem, using Knuth's Algorithm X with bitmasks instead of dancing links, compiled with numba.
+**PUGpuzzler** is a solver for polyform-based packing puzzles: given a board and a set of pieces, it finds **every** way to fill the board. It frames the puzzle as an exact cover problem, using Knuth's Algorithm X with bitmasks instead of dancing links, compiled with numba.
 
 It started as a project to investigate the difficulty of such games, but grew into a more general tool along the way. PUGpuzzler supports:
 
@@ -18,7 +18,7 @@ It started as a project to investigate the difficulty of such games, but grew in
 
 As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler* from SmartGames. I don't think I ever even finished a single puzzle from the hardest difficulty, *wizard*.
 
-A few years ago I tried to write a solver for it in Python with the limited knowledge I had then. It worked, but it was too slow to answer my questions, so I abandoned it. Recently I picked it up again and rewrote it from scratch, this time generalizing it to 3D puzzles and other variants.
+A few years ago I tried to write a solver for it in Python. It worked, but it was too slow and I did not manage to make it faster with the limited knowledge I had then, so I abandoned it. Recently I picked it up again and rewrote it from scratch, this time generalizing it to 3D puzzles and other variants.
 
 ## What it found
 
@@ -64,15 +64,15 @@ A game lives in `games/<Game>/`: `blocks.json`, `boards.json`, and optional `boo
 
 ## On agentic coding, and the name
 
-With the help of agentic coding, this task turned out to be far less daunting than it looked. As the project went on, I leaned more and more on LLMs for advice on architecture, cleaning up code and running tests. But unlike with my first attempt years ago, I could feel that I didn't have a full grasp of what the code was doing. I understood the individual parts, but the full picture was slipping away from me. Near the end of the project, I came across this video from 3Blue1Brown creator Grant Sanderson:
+With the help of agentic coding, this task turned out to be far less daunting than it looked. As the project went on, I leaned more and more on LLMs for advice on architecture, cleaning up code and running tests. But unlike with my first attempt years ago, I could feel that I didn't have a full grasp of what the code was doing. I understood the individual parts, but the full picture was slipping away from me. Near the end of the project, I came across [this video](https://youtu.be/0Ge3jKLDJaA) from 3Blue1Brown creator Grant Sanderson:
 
-https://youtu.be/0Ge3jKLDJaA
+
 
 It resonated with me. Before this project, I felt I had a deeper understanding of the code I produced, and now I found myself placing more trust in these agentic models. I was starting to identify more with the pug than the border collie. Hence the name: PUGpuzzler.
 
 To be clear, I still claim responsibility for this project and what it does. I have a good understanding of the code, although maybe not as deep as I could. But that was never the goal: I started this out of curiosity and passion, to answer some questions about a game I hold dear, and I think PUGpuzzler succeeded at that.
 
-This is a personal project, not a polished tool, and it isn't unique either. Many similar solvers exist, probably more efficient and more general (see polyformpuzzler, cemulate's polyomino-solver, and others).
+This is a personal project, not a polished tool, and it isn't unique either. Many similar solvers exist, probably more efficient and more general (see [polyformpuzzler](https://puzzler.sourceforge.net/), [cemulate's polyomino-solver](https://github.com/cemulate/polyomino-solver), and others).
 
 ## License
 
