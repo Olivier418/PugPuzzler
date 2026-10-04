@@ -47,7 +47,7 @@ pip install -e .
 python run_tests.py
 ```
 
-Install it editable (`-e`): the package reads `games/` and `bounds/` from this checkout.
+Install it editable (`-e`): the package reads `games/` from this checkout and writes `bounds/` there.
 
 Solve a booklet puzzle and print its solutions:
 
