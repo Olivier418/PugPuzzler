@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="header_img.svg" alt="PUGpuzzler logo" width="500">
+  <img src="assets/header_img.svg" alt="PUGpuzzler logo" width="500">
 </p>
 
 # PUGpuzzler
@@ -38,21 +38,23 @@ The best way to see how it all works is to run the two notebooks in [tutorial/](
 1. [1_solver.ipynb](tutorial/1_solver.ipynb): the algorithm. How a game is represented, how packing becomes exact cover, and how the search works, with a puzzle small enough to follow node by node. Game-agnostic.
 2. [2_findings.ipynb](tutorial/2_findings.ipynb): the applications. Solving the booklets, the bounds, the fewest pieces that make a unique puzzle, and checking IQpuzzlerPRO's promise.
 
-For the code itself, [SOLVER_WALKTHROUGH.md](SOLVER_WALKTHROUGH.md) goes through the solver, and [SOLVER_NOTES.md](SOLVER_NOTES.md) has the measurements behind each design choice, including the ideas I tried and removed.
+For the code itself, [SOLVER_WALKTHROUGH.md](docs/SOLVER_WALKTHROUGH.md) goes through the solver, and [SOLVER_NOTES.md](docs/SOLVER_NOTES.md) has the measurements behind each design choice, including the ideas I tried and removed.
 
 ## Quick start
 
 ```
-pip install -r requirements.txt
+pip install -e .
 python run_tests.py
 ```
+
+Install it editable (`-e`): the package reads `games/` and `bounds/` from this checkout.
 
 Solve a booklet puzzle and print its solutions:
 
 ```python
-from constants import GAMES_DIR
-from serialization import load_game
-from solving import solve_puzzle, Verbosity
+from pugpuzzler.constants import GAMES_DIR
+from pugpuzzler.serialization import load_game
+from pugpuzzler.solving import solve_puzzle, Verbosity
 
 game = load_game(GAMES_DIR / "IQpuzzler")
 solutions, stats = solve_puzzle(game.books["main_puzzles"]["50"], verbose=Verbosity.SHOW_SOLUTIONS)
@@ -71,3 +73,7 @@ It resonated with me. Before this project, I felt I had a deeper understanding o
 To be clear, I still claim responsibility for this project and what it does. I have a good understanding of the code, although maybe not as deep as I could. But that was never the goal: I started this out of curiosity and passion, to answer some questions about a game I hold dear, and I think PUGpuzzler succeeded at that.
 
 This is a personal project, not a polished tool, and it isn't unique either. Many similar solvers exist, probably more efficient and more general (see polyformpuzzler, cemulate's polyomino-solver, and others).
+
+## License
+
+MIT, see [LICENSE](LICENSE).

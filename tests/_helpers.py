@@ -3,8 +3,8 @@ temporary folders, never solutions/, benchmarks/ or bounds/."""
 import json
 from pathlib import Path
 
-from constants import GAMES_DIR
-from serialization import load_game
+from pugpuzzler.constants import GAMES_DIR
+from pugpuzzler.serialization import load_game
 
 ROOT = Path(__file__).resolve().parent.parent
 GAMES_ROOT = ROOT / GAMES_DIR

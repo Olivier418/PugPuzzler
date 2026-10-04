@@ -11,11 +11,11 @@ from typing import NamedTuple
 
 import numpy as np
 
-from classes import Puzzle
-from classes import kernel
-from classes.rendering import block_shape_lines
-from classes.solver import _start
-from constants import EMPTY, UNPLACED
+from pugpuzzler.classes import Puzzle
+from pugpuzzler.classes import kernel
+from pugpuzzler.classes.rendering import block_shape_lines
+from pugpuzzler.classes.solver import _start
+from pugpuzzler.constants import EMPTY, UNPLACED
 
 _UNCAPPED = 1 << 30
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")

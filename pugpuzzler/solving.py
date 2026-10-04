@@ -12,9 +12,9 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats
-from constants import SOLUTION_DIR, TIME_DECIMALS
-from serialization import next_run_dir, save_run
+from pugpuzzler.classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats
+from pugpuzzler.constants import SOLUTION_DIR, TIME_DECIMALS
+from pugpuzzler.serialization import next_run_dir, save_run
 
 
 class Verbosity(IntEnum):

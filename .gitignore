@@ -1,5 +1,9 @@
 __pycache__/
 *.pyc
+*.egg-info/
+build/
+.venv/
+.vscode/
+.ipynb_checkpoints/
 solutions/
 benchmarks/
-.ipynb_checkpoints/

@@ -3,7 +3,7 @@ from functools import cached_property
 
 import numpy as np
 
-from constants import EMPTY, OUTSIDE_BOARD
+from pugpuzzler.constants import EMPTY, OUTSIDE_BOARD
 from . import kernel
 from .blocks import Block, BlockCollection
 from .boards import Board

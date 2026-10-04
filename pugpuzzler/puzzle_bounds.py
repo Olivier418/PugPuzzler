@@ -40,10 +40,10 @@ import math
 import numpy as np
 from tqdm import tqdm
 
-from classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats
-from constants import EASIEST_DIFFICULTY, HARDEST_DIFFICULTY, LOWER_BOUND_BOOK, UPPER_BOUND_BOOK
-from serialization import Bounds
-from solving import timed_solve
+from pugpuzzler.classes import Puzzle, PuzzleBook, Setup, Solution, SolveStats
+from pugpuzzler.constants import EASIEST_DIFFICULTY, HARDEST_DIFFICULTY, LOWER_BOUND_BOOK, UPPER_BOUND_BOOK
+from pugpuzzler.serialization import Bounds
+from pugpuzzler.solving import timed_solve
 
 # filled count -> (nr_solutions, realization); a realization is
 # {block idx: placement_idx}, a block's idx being its column in the table.

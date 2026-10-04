@@ -10,9 +10,9 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from classes import Puzzle, SolveStats
-from constants import BENCHMARK_DIR, TIME_DECIMALS
-from serialization import load_stats, next_run_dir, write_stats
+from pugpuzzler.classes import Puzzle, SolveStats
+from pugpuzzler.constants import BENCHMARK_DIR, TIME_DECIMALS
+from pugpuzzler.serialization import load_stats, next_run_dir, write_stats
 
 
 # A config is the dict of keyword options handed to the solver (besides the

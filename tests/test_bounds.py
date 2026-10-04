@@ -11,11 +11,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402 -- the backend must be chosen first
 import numpy as np  # noqa: E402
 
-from plotting.plot_bounds import plot_bounds  # noqa: E402
-from plotting.plot_puzzle_stats import plot_puzzle_stats  # noqa: E402
-from puzzle_bounds import bound_counts, compute_puzzle_bounds  # noqa: E402
-from serialization import load_bounds, load_game, save_bounds  # noqa: E402
-from solving import solve_puzzle  # noqa: E402
+from pugpuzzler.plotting.plot_bounds import plot_bounds  # noqa: E402
+from pugpuzzler.plotting.plot_puzzle_stats import plot_puzzle_stats  # noqa: E402
+from pugpuzzler.puzzle_bounds import bound_counts, compute_puzzle_bounds  # noqa: E402
+from pugpuzzler.serialization import load_bounds, load_game, save_bounds  # noqa: E402
+from pugpuzzler.solving import solve_puzzle  # noqa: E402
 from tests._helpers import write_pentomino_game  # noqa: E402
 
 

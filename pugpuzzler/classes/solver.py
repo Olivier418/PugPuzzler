@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-from constants import EMPTY, UNPLACED
+from pugpuzzler.constants import EMPTY, UNPLACED
 from . import kernel
 
 
@@ -126,7 +126,7 @@ def solve_rows(
       main_puzzles/65, 2 s against 0.01 s); on the empty main board
       it finds no solution at all in 30 s, against ~1 ms for "both".
 
-    Measurements for the three modes are in SOLVER_NOTES.md.
+    Measurements for the three modes are in docs/SOLVER_NOTES.md.
 
     `order` ranks each node's candidate placements. It changes the
     order solutions come out in, never the set. The rank is a property
