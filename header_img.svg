@@ -546,19 +546,19 @@
             <path d="M580.321,1584.477C580.321,1584.477 591.298,1597.493 604.95,1584.252L601.542,1619.729C601.542,1619.729 595.196,1610.668 582.799,1619.127L580.321,1584.477Z" style="fill:rgb(223,15,31);"/>
         </g>
     </g>
-    <g transform="matrix(1,0,0,1,-791.439367,-1120.531982)">
+    <g transform="matrix(1,0,0,1,-791.439367,-1123.531982)">
         <text x="852.077px" y="1323.337px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(117,101,86);">P</text>
-        <text x="962.677px" y="1323.337px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(85,69,58);">u</text>
-        <text x="1068.727px" y="1323.337px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(58,58,58);">g</text>
-        <text x="852.077px" y="1477.787px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(0,159,225);">P</text>
-        <text x="962.677px" y="1477.787px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(219,107,161);">u</text>
-        <text x="1068.727px" y="1477.787px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(132,37,129);">z</text>
-        <text x="1171.277px" y="1477.787px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(240,161,58);">z</text>
-        <text x="1273.827px" y="1477.787px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(223,15,31);">l</text>
-        <text x="1329.302px" y="1477.787px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(149,187,42);">e</text>
-        <g transform="matrix(175,0,0,175,1509.551876,1477.787383)">
+        <text x="962.677px" y="1323.337px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(85,69,58);">U</text>
+        <text x="1089.727px" y="1323.337px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(58,58,58);">G</text>
+        <text x="852.077px" y="1458.037px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(0,159,225);">p</text>
+        <text x="953.927px" y="1458.037px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(219,107,161);">u</text>
+        <text x="1059.977px" y="1458.037px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(132,37,129);">z</text>
+        <text x="1162.527px" y="1458.037px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(240,161,58);">z</text>
+        <text x="1265.077px" y="1458.037px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(223,15,31);">l</text>
+        <text x="1320.552px" y="1458.037px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(149,187,42);">e</text>
+        <g transform="matrix(175,0,0,175,1500.801876,1458.037422)">
         </g>
-        <text x="1429.577px" y="1477.787px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(255,207,8);">r</text>
+        <text x="1420.827px" y="1458.037px" style="font-family:'FredokaOne-Regular', 'Fredoka One';font-size:175px;fill:rgb(255,207,8);">r</text>
     </g>
     <g id="vector-dog" serif:id="vector dog" transform="matrix(1,0,0,1,751.111286,56.827939)">
         <path id="body" d="M325.917,325.219C324.453,290.682 310.135,264.965 302.56,249.99C300.257,240.217 304.439,233.998 302.613,226.323C300.619,217.943 292.204,209.31 290.595,199.711C288.52,187.335 292.34,167.8 290.165,152.067C287.59,133.432 284.644,107.705 275.143,87.899C265.414,67.618 244.883,42.83 231.791,30.383C222.331,21.388 207.111,14.86 196.595,13.214C187.098,11.728 177.781,20.296 168.696,20.511C159.611,20.726 151.112,13.409 142.084,14.502C130.853,15.861 110.894,17.936 101.308,28.666C86.929,44.762 62.821,85.753 55.811,111.077C49.619,133.442 58.815,165.445 59.244,180.61C59.447,187.767 60.183,195.141 58.386,202.072C56.383,209.798 49.565,218.178 47.226,226.966C44.865,235.837 46.579,246.096 44.222,255.295C41.646,265.346 34.374,276.133 31.774,287.272C29.127,298.611 28.34,305.077 28.34,323.327L325.917,325.219Z" style="fill:rgb(232,210,173);"/>
