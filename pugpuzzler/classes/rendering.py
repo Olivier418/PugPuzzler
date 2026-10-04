@@ -8,7 +8,7 @@ delegator to `render` below; everything here operates on plain
 import numpy as np
 from colorama import Style
 
-from constants import EMPTY, OUTSIDE_BOARD
+from pugpuzzler.constants import EMPTY, OUTSIDE_BOARD
 from .blocks import Block, BlockCollection
 from .boards import Board
 

@@ -8,10 +8,10 @@ from pathlib import Path
 
 import numpy as np
 
-from classes import Puzzle
-from constants import UNPLACED
-from serialization import load_game
-from solving import solve_puzzle
+from pugpuzzler.classes import Puzzle
+from pugpuzzler.constants import UNPLACED
+from pugpuzzler.serialization import load_game
+from pugpuzzler.solving import solve_puzzle
 from tests._helpers import ROOT, load, rows, write_pentomino_game
 
 # None of these may change the solution set. branch="block" is left out on

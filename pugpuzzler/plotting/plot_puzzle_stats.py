@@ -6,8 +6,8 @@ import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
-from classes import Puzzle, SolveStats
-from constants import BOUND_COLORS, DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
+from pugpuzzler.classes import Puzzle, SolveStats
+from pugpuzzler.constants import BOUND_COLORS, DIFFICULTY_COLORS, UNKNOWN_DIFFICULTY_COLOR
 
 
 class Metric(NamedTuple):

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from constants import EMPTY, OUTSIDE_BOARD
+from pugpuzzler.constants import EMPTY, OUTSIDE_BOARD
 
 
 def parse_letter_grid(raw) -> np.ndarray:

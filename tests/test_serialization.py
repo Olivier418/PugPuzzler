@@ -7,9 +7,9 @@ from pathlib import Path
 
 import numpy as np
 
-from classes import PuzzleBook
-from serialization import load_complete_run, load_run_books, save_puzzlebook
-from solving import solve_puzzle, solve_puzzlebook
+from pugpuzzler.classes import PuzzleBook
+from pugpuzzler.serialization import load_complete_run, load_run_books, save_puzzlebook
+from pugpuzzler.solving import solve_puzzle, solve_puzzlebook
 from tests._helpers import GAMES_ROOT, load
 
 

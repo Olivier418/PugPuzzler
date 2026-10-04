@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
-from classes import Puzzle, SolveStats
-from constants import BOUND_COLORS, DIFFICULTY_COLORS
+from pugpuzzler.classes import Puzzle, SolveStats
+from pugpuzzler.constants import BOUND_COLORS, DIFFICULTY_COLORS
 from .plot_puzzle_stats import difficulty_color, solved_puzzles, style_2d
 
 

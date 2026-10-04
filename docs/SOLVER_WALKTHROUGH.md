@@ -1,6 +1,6 @@
 # Reading the solver
 
-A guide to `classes/kernel.py` and `classes/solver.py`, written to be read with
+A guide to `pugpuzzler/classes/kernel.py` and `pugpuzzler/classes/solver.py`, written to be read with
 both files open. Every concrete number below was printed from the running code
 on **IQpuzzler `main_puzzles/45`**, so you can reproduce any of it.
 

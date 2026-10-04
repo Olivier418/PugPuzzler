@@ -2,7 +2,7 @@ import copy
 
 import numpy as np
 
-from constants import EMPTY, UNPLACED
+from pugpuzzler.constants import EMPTY, UNPLACED
 from .blocks import BlockCollection
 from .boards import Board
 from .setup import Setup

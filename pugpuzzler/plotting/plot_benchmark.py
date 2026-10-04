@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from benchmark import ConfigKey, config_label
-from classes import SolveStats
-from constants import CONFIG_PALETTE
+from pugpuzzler.benchmark import ConfigKey, config_label
+from pugpuzzler.classes import SolveStats
+from pugpuzzler.constants import CONFIG_PALETTE
 
 
 def _poisson_rate(runs: list[tuple[np.ndarray, float]]) -> float:

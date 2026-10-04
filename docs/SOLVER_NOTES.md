@@ -207,7 +207,7 @@ Three reasons it does not transfer to an MRV search:
 
 The numbers in §4 and the weighted-branching numbers in §1 were measured on an
 earlier NumPy solver that maintained `live`/`counts` incrementally. It no longer
-exists — `classes/kernel.py` replaced it with a numba-compiled bitmask DFS on
+exists — `pugpuzzler/classes/kernel.py` replaced it with a numba-compiled bitmask DFS on
 2026-09-23, worth ~2.9x over a full enumeration of both games. Those figures are
 kept because the *reasoning* still holds; no absolute number in them is
 comparable to the current solver.

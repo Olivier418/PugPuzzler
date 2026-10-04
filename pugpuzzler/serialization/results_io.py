@@ -23,8 +23,8 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from classes import Game, Puzzle, PuzzleBook, Solution, SolveStats, Source
-from constants import BOUNDS_DIR, GAMES_DIR, LOWER_BOUND_BOOK, UNPLACED, UPPER_BOUND_BOOK
+from pugpuzzler.classes import Game, Puzzle, PuzzleBook, Solution, SolveStats, Source
+from pugpuzzler.constants import BOUNDS_DIR, GAMES_DIR, LOWER_BOUND_BOOK, UNPLACED, UPPER_BOUND_BOOK
 from .games_io import load_book, load_puzzles, load_setups, load_standalone_puzzles, write_puzzles
 from .jsonio import block_grids_to_rows, dump_json, rows_to_block_grids
 

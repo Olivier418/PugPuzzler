@@ -21,10 +21,10 @@ from pathlib import Path
 
 from colorama import Back, Fore, Style
 
-from classes import (
+from pugpuzzler.classes import (
     Block, BlockCollection, Board, Game, Puzzle, PuzzleBook, PyramidBoard, RegularBoard, Setup, Source,
 )
-from constants import GAMES_DIR
+from pugpuzzler.constants import GAMES_DIR
 from .jsonio import block_grids_to_rows, dump_json, parse_letter_grid
 
 

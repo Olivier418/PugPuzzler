@@ -7,12 +7,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402 -- the backend must be chosen first
 
-from benchmark import config_key  # noqa: E402
-from classes import PuzzleBook  # noqa: E402
-from plotting.plot_benchmark import plot_benchmark  # noqa: E402
-from plotting.plot_puzzle_stats import plot_puzzle_stats  # noqa: E402
-from plotting.plot_solve_timeline import plot_solve_timeline  # noqa: E402
-from solving import solve_puzzlebook  # noqa: E402
+from pugpuzzler.benchmark import config_key  # noqa: E402
+from pugpuzzler.classes import PuzzleBook  # noqa: E402
+from pugpuzzler.plotting.plot_benchmark import plot_benchmark  # noqa: E402
+from pugpuzzler.plotting.plot_puzzle_stats import plot_puzzle_stats  # noqa: E402
+from pugpuzzler.plotting.plot_solve_timeline import plot_solve_timeline  # noqa: E402
+from pugpuzzler.solving import solve_puzzlebook  # noqa: E402
 from tests._helpers import load  # noqa: E402
 
 

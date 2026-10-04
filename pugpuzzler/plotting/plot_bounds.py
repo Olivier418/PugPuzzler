@@ -3,8 +3,8 @@ from collections.abc import Mapping
 import matplotlib.pyplot as plt
 import numpy as np
 
-from classes import Puzzle, SolveStats
-from constants import OUT_OF_BOUNDS_COLOR
+from pugpuzzler.classes import Puzzle, SolveStats
+from pugpuzzler.constants import OUT_OF_BOUNDS_COLOR
 from .plot_puzzle_stats import METRICS, format_axes, solved_puzzles
 
 
