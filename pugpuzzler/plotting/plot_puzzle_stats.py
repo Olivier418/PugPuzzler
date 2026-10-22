@@ -3,6 +3,7 @@ from typing import Callable, NamedTuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from adjustText import adjust_text
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
@@ -112,6 +113,15 @@ def format_axes(ax: plt.Axes, metrics) -> None:
             ax.set_yscale("log")
 
 
+def _place_labels(ax: plt.Axes, texts: list, dots) -> None:
+    """Spread `texts` apart with adjustText, away from each other and from
+    `dots` (the scatter), with a thin leader line for any label that had to
+    move off its dot. Positions are fixed for the current axes limits."""
+    adjust_text(
+        texts, ax=ax, objects=dots, expand=(1.2, 1.4),
+        arrowprops=dict(arrowstyle="-", color="#999999", linewidth=0.6, shrinkA=1.5, shrinkB=5))
+
+
 def plot_puzzle_stats(
     puzzles: Mapping[str, Puzzle],
     stats: Mapping[str, SolveStats],
@@ -120,6 +130,7 @@ def plot_puzzle_stats(
     z: str | Metric | None = None,
     title: str | None = None,
     ax: plt.Axes = None,
+    labels: bool = True,
 ) -> plt.Axes:
     """Scatter plot: one dot per puzzle in `stats`, colored by
     difficulty. `x`, `y` (default `nr_filled_cells`, `nr_solutions`) and --
@@ -140,12 +151,14 @@ def plot_puzzle_stats(
     Puzzles that land on the same point (same values, same color) are
     drawn as one dot labeled with all their names, since they'd otherwise
     hide each other. Near-ties, and ties with an overlaid plot's dots, stay
-    as they are.
+    as they are, but 2D labels are moved apart so they stay readable.
 
     compute_puzzle_bounds' own tags (HARDEST_DIFFICULTY,
     EASIEST_DIFFICULTY) are colored from constants.BOUND_COLORS rather
     than constants.DIFFICULTY_COLORS, since they aren't the game's own
     difficulty tiers.
+
+    `labels=False` leaves the puzzle names off.
 
     Pass an existing `ax` to overlay on it rather than starting a fresh
     plot. The axes are the plot's, not the call's: an `ax` this function
@@ -185,7 +198,7 @@ def plot_puzzle_stats(
     for i in np.flatnonzero(keep):
         key = (*(column[i] for column in columns), difficulty_color(difficulties[i]))
         groups.setdefault(key, []).append(names[i])
-    labels = [_group_label(names) for names in groups.values()]
+    texts_for_dots = [_group_label(names) for names in groups.values()]
     colors = [key[-1] for key in groups]
     columns = [np.array([key[d] for key in groups], dtype=float) for d in range(len(metrics))]
     if is_3d:
@@ -202,15 +215,19 @@ def plot_puzzle_stats(
 
     if is_3d:
         ax.scatter(*columns, c=colors, s=70, edgecolors="white", linewidths=0.6, depthshade=False)
-        for point, label in zip(zip(*columns), labels):
+        for point, label in zip(zip(*columns), texts_for_dots if labels else []):
             ax.text(*point, f" {label}", fontsize=8, color="#444444")
     else:
-        ax.scatter(*columns, c=colors, s=70, edgecolors="white", linewidths=0.6, zorder=3)
-        for point, label in zip(zip(*columns), labels):
-            ax.annotate(label, point, textcoords="offset points",
-                        xytext=(6, 4), fontsize=8, color="#444444")
+        dots = ax.scatter(*columns, c=colors, s=70, edgecolors="white", linewidths=0.6, zorder=3)
+        texts = [ax.text(*point, label, fontsize=8, color="#444444")
+                 for point, label in zip(zip(*columns), texts_for_dots if labels else [])]
 
+    if title or inherited is None:
+        ax.set_title(title or " vs. ".join(m.label for m in reversed(metrics)), fontsize=12, color="#333333")
     format_axes(ax, metrics)
+    ax.figure.tight_layout()
+    if not is_3d and texts:
+        _place_labels(ax, texts, dots)
 
     # legend: the difficulties present, merged into whatever an overlaid
     # plot already shows. The existing handles/labels live on the Legend
@@ -226,7 +243,4 @@ def plot_puzzle_stats(
     if handles:
         ax.legend(handles=handles, title="Difficulty", frameon=False, loc="best")
 
-    if title or inherited is None:
-        ax.set_title(title or " vs. ".join(m.label for m in reversed(metrics)), fontsize=12, color="#333333")
-    ax.figure.tight_layout()
     return ax
