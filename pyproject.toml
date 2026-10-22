@@ -22,6 +22,8 @@ dependencies = [
     "tqdm",
     # plotting/ only (legend_handles needs 3.7+).
     "matplotlib>=3.7",
+    # plotting/ only: keeps the dots' labels apart, with leader lines.
+    "adjustText>=1.0",
 ]
 
 [tool.setuptools.packages.find]

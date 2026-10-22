@@ -16,18 +16,19 @@ It started as a project to investigate the difficulty of such games, but grew in
 
 ## Why
 
-As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler* from SmartGames. I don't think I ever even finished a single puzzle from the hardest difficulty, *wizard*.
+As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler** from SmartGames. I don't think I ever even finished a single puzzle from the hardest difficulty, *wizard*. 
 
-A few years ago I tried to write a solver for it in Python. It worked, but it was too slow and I did not manage to make it faster with the limited knowledge I had then, so I abandoned it. Recently I picked it up again and rewrote it from scratch, this time generalizing it to 3D puzzles and other variants.
+A few years ago, I started wondering whether this difficulty was actually the most difficult these puzzles could get. To answer this, I tried to write a solver for this game in Python. It worked, but it was too slow and I did not manage to make it fast enough with the limited knowledge I had then. Since it was not able to answer my question, I abandoned it. 
+
+Recently, I picked it up again and rewrote it from scratch, this time generalizing it to 3D puzzles and other variants. Along the way, I gained some other interesting insights, which I thought were worth sharing as a fun read.
 
 ## What it found
 
-The tutorials run the solver on the puzzle booklets of **IQpuzzler** (the original) and **IQpuzzlerPRO** (the sequel). A few of the results:
+The tutorials run the solver on the puzzle booklets of **IQpuzzler** (the original) and **IQpuzzlerPRO** (the sequel, with a flat board, a diagonal one and a 3D pyramid), and ask what the puzzles themselves look like:
 
-- While the pyramid puzzles are harder to the human player than the 2-dimensional puzzles, the computer actually finds them easier.
-- While some of the IQpuzzler's 72 booklet puzzles have a unique solution, others have many more (some more than a thousand). 
-- Although the IQPuzzlerPRO promises a unique solution to every puzzle, we see that this holds for all but one puzzle.
-- We investigate how difficult of a puzzle we can make for both games, and find new puzzles that are objectively harder than any of the given puzzles in their booklets.
+1. **How many solutions do the puzzles have?** This depends on the game; the number of solutions to a puzzle of IQpuzzler ranges between 1 and over a thousand. On the other hand, the IQpuzzlerPRO promises a unique solution to each puzzle, and this is nearly true: all but one of its 120 puzzles are unique. Pyramid puzzle 120 has five.
+2. **How is the difficulty of the puzzles determined?** By how many cells are given, not by how many solutions there are: the tiers follow the filled cells, and the number of solutions does not seem to correlate to the difficulty (for IQpuzzler).
+3. **Do there exist puzzles harder than those in the booklets?** Yes: for example, the IQpuzzler board can force a unique solution using just two pieces (7 cells), while the booklet never gives fewer than three (13 cells).
 
 
 ## Tutorials
@@ -35,8 +36,8 @@ The tutorials run the solver on the puzzle booklets of **IQpuzzler** (the origin
 
 The best way to see how it all works is to run the two notebooks in [tutorial/](tutorial/). Everything in them is computed when you run it.
 
-1. [1_solver.ipynb](tutorial/1_solver.ipynb): the algorithm. How a game is represented, how packing becomes exact cover, and how the search works, with a puzzle small enough to follow node by node. Game-agnostic.
-2. [2_findings.ipynb](tutorial/2_findings.ipynb): the applications. Solving the booklets, the bounds, the fewest pieces that make a unique puzzle, and checking IQpuzzlerPRO's promise.
+1. [1_solver.ipynb](tutorial/1_solver.ipynb): the algorithm: how a game is represented and how the search works, followed by an exemplary solve with a puzzle small enough to follow node by node. 
+2. [2_findings.ipynb](tutorial/2_findings.ipynb): the applications: the questions above, answered on the real puzzle booklets.
 
 For the code itself, [SOLVER_WALKTHROUGH.md](docs/SOLVER_WALKTHROUGH.md) goes through the solver, and [SOLVER_NOTES.md](docs/SOLVER_NOTES.md) has the measurements behind each design choice, including the ideas I tried and removed.
 
@@ -47,7 +48,7 @@ pip install -e .
 python run_tests.py
 ```
 
-Install it editable (`-e`): the package reads `games/` from this checkout and writes `bounds/` there.
+Install it editable (`-e`): the package reads `games/` from this checkout.
 
 Solve a booklet puzzle and print its solutions:
 
