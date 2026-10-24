@@ -79,7 +79,7 @@ three `branch` modes, with nothing to keep in sync.
 by how many empty cells it would strand with no empty neighbour (rejecting a
 dead branch one ply early; it needed a per-cell adjacency table, `Tables.neigh`),
 and `"fanout"` by how many options it left for the next empty cell. Benchmarked
-on the six empty boards, 15 trials of ~15 s each per rule (`benchmark.py`,
+on the five empty boards, 15 trials of ~15 s each per rule (`benchmark.py`,
 throughput in solutions/s pooled over trials, and median time to the first
 solution):
 
@@ -90,12 +90,11 @@ solution):
 | PRO `empty_alt` | **4196** / 15 ms | 4073 / 10 ms | 3894 / 11 ms | 3734 / 8.4 ms |
 | PRO `empty_main` | 3062 / 14 ms | 4460 / 8.8 ms | 4299 / 9.3 ms | **5062** / 5.9 ms |
 | PRO `empty_pyramid` | 252 / 22 ms | 248 / 18 ms | 224 / 20 ms | **336** / 345 ms |
-| IQquub `empty_cube` | 20 / 58 ms | **37** / 32 ms | 35 / 35 ms | 34 / 19 ms |
 
 No rule wins on every board, and plain table order (`False`) is best or close
 on most, so the two extra rules weren't worth their ~60 lines of kernel. Note
 that `counts` — what `order=None` picks when a limit is set — is also the
-slowest on four of the six by throughput; the default may deserve a second
+slowest on three of the five by throughput; the default may deserve a second
 look. The trials are still in `benchmarks/` (config folders `order=pockets`,
 `order=fanout`).
 
