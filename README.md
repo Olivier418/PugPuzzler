@@ -4,21 +4,23 @@
 
 # PUGpuzzler
 
+*Packing Under Geometry*
+
 **PUGpuzzler** is a solver for polyform-based packing puzzles: given a board and a set of pieces, it finds **every** way to fill the board. It frames the puzzle as an exact cover problem, using Knuth's Algorithm X with bitmasks instead of dancing links, compiled with numba.
 
 It started as a project to investigate the difficulty of such games, but grew into a more general tool along the way. PUGpuzzler supports:
 
 - 2-dimensional and 3 dimensional puzzles
-- puzzles on rectangular and triangular lattices
+- puzzles on rectangular and offset (pyramid) lattices
 - easy loading and saving of new puzzles
 - tools for investigating the puzzles and their solutions 
 
 
 ## Why
 
-As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler** from SmartGames. I don't think I ever even finished a single puzzle from the hardest difficulty, *wizard*. 
+As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler** from SmartGames. 
 
-A few years ago, I started wondering whether this difficulty was actually the most difficult these puzzles could get. To answer this, I tried to write a solver for this game in Python. It worked, but it was too slow and I did not manage to make it fast enough with the limited knowledge I had then. Since it was not able to answer my question, I abandoned it. 
+A few years ago, I started wondering whether the prescribed puzzles from the booklet were actually as difficult it could get. To answer this, I tried to write a solver for this game in Python. It worked, but it was too slow and I did not manage to make it fast enough with the limited knowledge I had then. Since it was not able to answer my question, I abandoned it. 
 
 Recently, I picked it up again and rewrote it from scratch, this time generalizing it to 3D puzzles and other variants. Along the way, I gained some other interesting insights, which I thought were worth sharing as a fun read.
 
@@ -69,7 +71,7 @@ With the help of agentic coding, this task turned out to be far less daunting th
 
 
 
-It resonated with me. Before this project, I felt I had a deeper understanding of the code I produced, and now I found myself placing more trust in these agentic models. I was starting to identify more with the pug than the border collie. Hence the name: PUGpuzzler.
+It resonated with me. Before this project, I felt I had a deeper understanding of the code I produced, and now I found myself placing more trust in these agentic models. I was starting to identify more with the pug than the border collie. Hence the name: PUGpuzzler (Packing Under Geometry being the respectable reading).
 
 To be clear, I still claim responsibility for this project and what it does. I have a good understanding of the code, although maybe not as deep as I could. But that was never the goal: I started this out of curiosity and passion, to answer some questions about a game I hold dear, and I think PUGpuzzler succeeded at that.
 

@@ -22,8 +22,8 @@ better informed than either, and is the default. See `choose_item`.
 
 `nw` is read from `occ.shape[0]` at runtime and every mask operation
 loops over it, so there is no cell-count ceiling anywhere and no separate
-code path for big boards: 55 cells (IQpuzzler) and 64 (IQquub, exactly at
-the one-word boundary) both give NW == 1, and a 200-cell board would give
+code path for big boards: 55 cells (IQpuzzler) and 64 (exactly at the
+one-word boundary) both give NW == 1, and a 200-cell board would give
 NW == 4 and work unchanged. The word loop costs ~1.19x against a
 hand-written scalar kernel.
 
@@ -101,7 +101,7 @@ def build_tables(placement_cells, n_cells):
     """
     n_blocks = len(placement_cells)
     if n_blocks > 64:
-        # `used` is a single uint64; 12 blocks today, 10 on IQquub.
+        # `used` is a single uint64; 12 blocks today.
         raise ValueError(f"{n_blocks} blocks; the used-block mask holds 64.")
 
     sizes = [arr.shape[0] for arr in placement_cells]
@@ -415,8 +415,8 @@ def rank(t, cands, n, occ, used, rule, priority, cnt, stamp, stamp_id, key, idx)
     # Insertion sort over the permutation, comparing key rows. n is the
     # live fan-out (p95 of 5, max 28 at a cell; a few hundred at a block),
     # so this beats anything with setup cost. No packing into a single
-    # integer: IQquub has kmax 8 and cell degrees over 300, which needs
-    # 72 bits.
+    # integer: a game with big blocks and high cell degrees (kmax 8, degrees
+    # over 300) would need 72 bits.
     for a in range(1, n):
         ia = idx[a]
         b = a - 1
