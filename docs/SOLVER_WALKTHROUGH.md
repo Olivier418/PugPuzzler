@@ -8,17 +8,16 @@ on **IQpuzzler `main_puzzles/45`**, so you can reproduce any of it.
 
 ## 0. The shape of it, in one paragraph
 
-A node branches on the scarcest **item** — either an empty cell (try every
-placement covering it) or an unplaced block (try every placement of it) —
+A node branches on the scarcest **item**, either an empty cell (try every
+placement covering it) or an unplaced block (try every placement of it),
 because either way the branches partition that node's solutions. The board's
 occupancy is a **bitmask**: `occ` is one `uint64` per 64 cells, so "does this
 placement fit" is `pmask[gid] & occ == 0`, one AND. Nothing is maintained
 incrementally; counts are recomputed when a rule asks for them, capped so the
 scan stops as soon as a candidate cannot win.
 
-There is no symmetry reduction and no partitioning into components. Both were
-built, measured and removed — `SOLVER_NOTES.md` has the numbers and the
-reasoning, which is the file to read before adding either back.
+The solver uses no symmetry reduction and does not split the board into
+components. `DESIGN_NOTES.md` explains why not.
 
 ---
 
@@ -29,7 +28,7 @@ Everything in both files is built from these. Get them and the rest follows.
 | term | what it is | example on `main_puzzles/45` |
 |---|---|---|
 | **cell index** | `0 .. n_cells-1`, a compact index into the board's real cells (no off-board padding). Same indexing `Puzzle.grid` uses. | `n_cells = 55` |
-| **block position** | `0 .. n_blocks-1`: the block's key in the Setup's `BlockCollection` (the order of `blocks.json`), used as is — also its column in a solution row. | `n_blocks = 12` |
+| **block position** | `0 .. n_blocks-1`: the block's key in the Setup's `BlockCollection` (the order of `blocks.json`), used as is, also its column in a solution row. | `n_blocks = 12` |
 | **global id (`gid`)** | One specific placement: one block, in one orientation, at one spot. Numbered `0 .. n_total-1`. | `n_total = 1789` |
 | **`occ`** | `uint64[NW]`. Bit *c* set = cell *c* is filled. | start: `0x47ffffff`, 28 of 55 cells |
 | **`used`** | one `uint64`. Bit *p* set = block position *p* is placed. | start: `0b001100010111`, 6 of 12 |
@@ -61,7 +60,7 @@ of that placement's geometry.
 
 ---
 
-## 2. `kernel.Tables` — the static data
+## 2. `kernel.Tables`: the static data
 
 Built once per `Setup` by `build_tables()` and cached on it as
 `Setup.kernel_tables`, so a whole book builds them once rather than once per
@@ -80,13 +79,13 @@ search.
 | `n_cells`, `n_blocks` | int | 55, 12 |
 | `fan` | int | widest candidate list, `max(cell degree, block run)` = 264. A block branch's list is a whole block run, so both kinds fit the same buffers. |
 
-"CSR" is just a flat array plus offsets — the standard way to store lists of
+"CSR" is just a flat array plus offsets, the standard way to store lists of
 different lengths in two arrays instead of a list of arrays (numba can't take a
 list of arrays).
 
 ---
 
-## 3. `kernel.Workspace` — one search's mutable state
+## 3. `kernel.Workspace`: one search's mutable state
 
 Built by `make_workspace()` when a `solve_rows()` generator starts, and owned by
 that generator alone: two searches never share state, and abandoning one
@@ -98,7 +97,7 @@ The stack is indexed by **depth** = how many blocks we have placed so far.
 |---|---|---|
 | `occ` | `(NW,)` uint64 | cells filled *right now* |
 | `used` | `(1,)` uint64 | blocks placed right now (an array, not a scalar, because the kernel mutates it) |
-| `ctl` | `(3,)` int64 | `[depth, need_frame, stamp_counter]` — the three loop variables that must survive between calls |
+| `ctl` | `(3,)` int64 | `[depth, need_frame, stamp_counter]`, the three loop variables that must survive between calls |
 | `st_gid` | `(13,)` int32 | `st_gid[d]` = the placement chosen at depth *d*. The path. |
 | `st_cands` | `(13, 264)` int32 | `st_cands[d]` = the candidate list at depth *d* |
 | `st_n` | `(13,)` int32 | how many candidates that is |
@@ -112,7 +111,7 @@ depth, here are the moves, here is how far through them I am."
 
 ---
 
-## 4. `kernel.kernel()` — the search loop
+## 4. `kernel.kernel()`: the search loop
 
 This is the part worth reading slowly. It is one `while True` with four
 branches, and it is iterative rather than recursive for two reasons: numba's
@@ -126,10 +125,10 @@ The invariant, true at the top of every iteration:
 > `need_frame` says whether depth `depth`'s candidate list has been built yet.
 
 Because that holds at the top of every iteration, it holds at every `return`
-too — so resuming is literally "call it again and let the loop continue." There
+too, so resuming is literally "call it again and let the loop continue." There
 is no separate resume path that could be wrong.
 
-### Branch 1 — build a frame (`need_frame == 1`)
+### Branch 1: build a frame (`need_frame == 1`)
 
 ```python
 solved = all(occ[v] == full[v])
@@ -137,7 +136,7 @@ solved = all(occ[v] == full[v])
 
 **Why full board = solved.** `Setup._validate_area` guarantees the blocks' total area
 equals the board's, and pre-placed blocks fill whole placements. So covering
-every cell with distinct unplaced blocks *must* have used all of them — and the
+every cell with distinct unplaced blocks *must* have used all of them, and the
 converse too, which is what makes `branch="block"` terminate: place every block
 and `occ == full` follows. No separate "every block placed" check is needed.
 
@@ -155,14 +154,14 @@ rank(...)                                # sort them                  -> §5
 ```
 
 **Everything after those three lines is identical either way.** The rest of the
-loop only ever sees "a list of gids", never what kind of item produced it —
+loop only ever sees "a list of gids", never what kind of item produced it,
 which is exactly why `order` applies uniformly to both (§5).
 
 On puzzle 45's opening position `choose_item` returns **cell 29**, with 11 live
 placements: `[799, 831, 1215, 1255, 1295, 1329, 1383, 1410, 1464, 1518, 1745]`.
 Those are the 11 children of the root node.
 
-### Branch 2 — out of budget
+### Branch 2: out of budget
 
 ```python
 if nodes >= budget: return BUDGET
@@ -171,7 +170,7 @@ if nodes >= budget: return BUDGET
 The only reason the kernel ever stops early. The driver picks `budget` so this
 happens about every 2 ms (§6).
 
-### Branch 3 — backtrack (frame exhausted)
+### Branch 3: backtrack (frame exhausted)
 
 ```python
 if st_cur[depth] == st_n[depth]:
@@ -182,11 +181,11 @@ if st_cur[depth] == st_n[depth]:
 ```
 
 **`^=` undoes the placement.** XOR with the same mask that was OR'd in clears
-exactly those bits, because we know they were set. No saved copies, no undo log
-— the placement is its own inverse. `depth < 0` means we have backtracked past
+exactly those bits, because we know they were set. No saved copies, no undo log.
+The placement is its own inverse. `depth < 0` means we have backtracked past
 the root: the subtree is finished.
 
-### Branch 4 — descend (take the next candidate)
+### Branch 4: descend (take the next candidate)
 
 ```python
 g = st_cands[depth, st_cur[depth]]
@@ -205,9 +204,9 @@ Four instructions of actual work. Everything else in the file exists to decide
 
 Two separate decisions, and it is worth keeping them apart:
 
-- **`branch`** — *which item* this node branches on. Changes the shape of the
+- **`branch`**: *which item* this node branches on. Changes the shape of the
   tree, so it changes how many nodes exist.
-- **`order`** — *what sequence* that item's placements are tried in. Cannot
+- **`order`**: *what sequence* that item's placements are tried in. Cannot
   change which nodes exist in a full enumeration; it only changes which
   solutions come out first.
 
@@ -223,53 +222,46 @@ Two MRV scans, each capped at the best count so far, returning `(kind, index)`.
 
 **Why the two counts are comparable at 1:1.** A child of either kind places
 exactly one block, so an equal candidate count means an equal branching factor
-*and* equal progress. There is no unit mismatch for a weight to correct, which
-is why `"both"` is a plain minimum with no knob. Timings and node counts
-for each mode are in `SOLVER_NOTES.md` §1.
+*and* equal progress, so `"both"` is a plain minimum and needs no weighting.
+`DESIGN_NOTES.md` §1 compares the three modes.
 
-`"block"` alone is the weak one and exists as a baseline: it cannot see an
-uncoverable cell until some block runs out of room, so it prunes almost nothing
-where little is pre-filled. Worst book puzzle measured is `main_puzzles/65` at
-2 s against 0.01 s; on the *empty* main board it finds no solution at all in
-30 s.
+`"block"` alone exists as a baseline: it cannot see an uncoverable cell until
+some block runs out of room, so it prunes almost nothing where little is
+pre-filled.
 
 **The trick that makes MRV affordable** is the `cap` argument to `_count_cell` /
 `_count_block`. Only the *minimum* matters, so once an item is known to have at
 least as many candidates as the best item so far, the rest of its list is
 irrelevant and the count gives up. Cells have ~150 placements each while the
 running best is usually in the single digits, so the scan almost always stops
-after a handful of tests. This alone took MRV from 243k to ~400–500k nodes/s.
+after a handful of tests.
 
 Note that a 0-candidate item is a **dead end** (a cell nothing can cover, or a
-block with nowhere to go) and a 1-candidate item is **forced** — both end the
+block with nowhere to go) and a 1-candidate item is **forced**; both end the
 scan immediately, so MRV prunes while it chooses.
 
-### `_live()` — the one predicate
+### `_live()`: the one predicate
 
 ```python
 used & BIT[pblock[gid]] == 0   and   pmask[gid] & occ == 0
 ```
 
 "Its block isn't placed yet, and it doesn't overlap anything." Every candidate
-collector calls this. **Do not write a second copy of it** — see §8.
+collector and counter goes through this one function (§7 says why).
 
 ### `rank(...)`
 
 Sorts a candidate list in place, best first. One implementation serves both
 branch kinds, and it is never told which it was handed: the key is a property
 of a **placement**, not of the item the node branched on. That is the whole
-mechanism behind "`order` works the same for cells and blocks" — there is
+mechanism behind "`order` works the same for cells and blocks": there is
 nothing to keep in sync, because there is only one code path.
 
 | `order=` | key |
 |---|---|
 | `True` | each candidate's cells' live-placement counts, sorted and compared like a tuple |
-| `False` | table order — or, if seeded, by the random priority alone |
+| `False` | table order (or, if seeded, by the random priority alone) |
 | `None` | `True` iff a limit is set |
-
-(Two more keys, `"pockets"` — empty cells stranded — and `"fanout"` — options
-left for the next cell — were benchmarked on the six empty boards and removed
-2026-09-28: no rule won on every board, and `False` was as good as any on most.)
 
 Every key ends with `priority[gid]`, a permutation, so no two candidates ever
 compare equal. That totality is what makes a seeded run reproducible: without
@@ -280,17 +272,17 @@ ordering is nearly free.
 
 `cnt`/`stamp` memoise the per-cell counts *within one node*: `stamp[c] ==
 stamp_id` means `cnt[c]` is current. `stamp_id` is `ctl[2]`, which only ever
-increments — it must be unique across the **whole run**, not per call, because
+increments, so it must be unique across the **whole run**, not per call, because
 `nodes` restarts at zero every chunk.
 
 ---
 
-## 6. `solver.solve_rows` — the Python side
+## 6. `solver.solve_rows`: the Python side
 
 ### `solve_rows()` top to bottom
 
-`solve_rows(puzzle, ...)` is a thin generator (`Puzzle.solve_rows` calls it) —
-it owns what the kernel cannot see: the Puzzle, the options, the clock and the
+`solve_rows(puzzle, ...)` is a thin generator (`Puzzle.solve_rows` calls it).
+It owns what the kernel cannot see: the Puzzle, the options, the clock and the
 generator contract. Nothing else.
 
 1. **Resolve `branch` and `order`** into integer rule codes (`_resolve_rules`).
@@ -349,38 +341,14 @@ from rows when they are wanted.
 
 ---
 
-## 7. What is deliberately not here
+## 7. The sharp edges
 
-Two reductions were built, measured and removed. `SOLVER_NOTES.md` has the
-numbers; the short version:
-
-**Symmetry (orbit reduction).** At a node whose open region had a nontrivial
-symmetry group, branch on a *block*, group its placements into orbits, search
-one representative each and transform its solutions into the rest. It had to run
-in Python on a "symmetric spine" above the kernel, because the orbit argument
-needs a branch set the group carries onto itself — a block's candidate set
-qualifies, a cell's does not — plus `Setup.placement_lookup` and State
-transforms, none of which exist down here. It was exact and it worked. It also
-did **nothing** on real puzzles: across all 221 book puzzles in both shipped
-games it changed the node count by at most 1.4%, and on PRO `main_puzzles` not
-at all. It paid only on the fully-empty boards, and branching on both item kinds
-(§5) since recovered most of that. Removed 2026-09-23.
-
-**Partitioning into components.** Prune or split when the open region falls
-apart. Measured at 0.3–0.4% of nodes on most books (16–22% on the PRO boards,
-which barely broke even on time), and it arrives too late to matter: MRV already
-goes straight for a leftover pocket, which is most of what a split would find.
-
----
-
-## 8. The sharp edges
-
-Four things that are load-bearing and non-obvious.
+Four things that are easy to break and not obvious from the code. Read them before you change the kernel.
 
 1. **`_live` must not be duplicated.** `choose_item` picks the item with the
    fewest live candidates; `collect_cell`/`collect_block` then materialise them.
    If the counters and the collectors ever disagreed, the counts steering MRV
-   would be lies — and a count of 0 is taken as *proof* that the node is dead,
+   would be lies, and a count of 0 is taken as *proof* that the node is dead,
    so the search would prune live subtrees with no error. Everything goes
    through `kernel._live` (`_count_block` drops its block half only because its
    caller has already established the block is unplaced).
@@ -402,7 +370,7 @@ Four things that are load-bearing and non-obvious.
 
 ---
 
-## 9. Poking at it
+## 8. Poking at it
 
 **Debug it as plain Python.** This is the single most useful thing here:
 
@@ -412,7 +380,7 @@ NUMBA_DISABLE_JIT=1 python -m unittest tests.test_solver.TestSolver.test_pentomi
 
 Every `@njit` becomes an ordinary function. `pdb` works, exceptions have real
 tracebacks, `print` works, and array bounds are actually checked (numba's are
-not). ~1300x slower, so use small cases — but the node counts and solution sets
+not). ~1300x slower, so use small cases, but the node counts and solution sets
 are identical, which is what makes one implementation enough.
 
 **Watch the search.** Node counts come back from the kernel:
@@ -440,15 +408,15 @@ change to the kernel has been verified.
 
 ---
 
-## 10. Where to start reading
+## 9. Where to start reading
 
 If you read in this order it should build up cleanly:
 
-1. `kernel.Tables` + `build_tables` — the data, nothing clever
-2. `kernel._live`, `collect_cell`, `_count_cell` — three short functions
-3. `kernel.kernel` — the loop, with §4 beside it
-4. `kernel.choose_item` + `rank` — the two decisions, with §5 beside it
-5. `solver.solve_rows` + `_start` — the Python wrapper
+1. `kernel.Tables` + `build_tables`: the data, nothing clever
+2. `kernel._live`, `collect_cell`, `_count_cell`: three short functions
+3. `kernel.kernel`: the loop, with §4 beside it
+4. `kernel.choose_item` + `rank`: the two decisions, with §5 beside it
+5. `solver.solve_rows` + `_start`: the Python wrapper
 
-Skip §5 on a first pass. The solver is correct and complete without any of it —
+Skip §5 on a first pass. The solver is correct and complete without any of it:
 `choose_item` and `rank` only decide speed and ordering, never the answer.

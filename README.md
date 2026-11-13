@@ -41,7 +41,7 @@ The best way to see how it all works is to run the two notebooks in [tutorial/](
 1. [1_solver.ipynb](tutorial/1_solver.ipynb): the algorithm: how a game is represented and how the search works, followed by an exemplary solve with a puzzle small enough to follow node by node. 
 2. [2_findings.ipynb](tutorial/2_findings.ipynb): the applications: the questions above, answered on the real puzzle booklets.
 
-For the code itself, [SOLVER_WALKTHROUGH.md](docs/SOLVER_WALKTHROUGH.md) goes through the solver, and [SOLVER_NOTES.md](docs/SOLVER_NOTES.md) has the measurements behind each design choice, including the ideas I tried and removed.
+For the code itself, [SOLVER_WALKTHROUGH.md](docs/SOLVER_WALKTHROUGH.md) goes through the solver, and [DESIGN_NOTES.md](docs/DESIGN_NOTES.md) has the measurements behind each design choice, including the ideas I tried and removed.
 
 ## Quick start
 
@@ -67,7 +67,7 @@ A game lives in `games/<Game>/`: `blocks.json`, `boards.json`, and optional `boo
 
 ## On agentic coding, and the name
 
-With the help of agentic coding, this task turned out to be far less daunting than it looked. As the project went on, I leaned more and more on LLMs for advice on architecture, cleaning up code and running tests. But unlike with my first attempt years ago, I could feel that I didn't have a full grasp of what the code was doing. I understood the individual parts, but the full picture was slipping away from me. Near the end of the project, I came across [this video](https://youtu.be/0Ge3jKLDJaA) from 3Blue1Brown creator Grant Sanderson:
+With the help of agentic coding, this task turned out to be far less daunting than it looked. As the project went on, I leaned more and more on LLMs for advice on architecture, cleaning up code and running tests. But unlike with my first attempt years ago, I could feel that I didn't have a full grasp of what the code was doing. I understood the individual parts, but the full picture was slipping away from me. Near the end of the project, I came across [this video](https://youtu.be/0Ge3jKLDJaA) from 3Blue1Brown creator Grant Sanderson.
 
 
 

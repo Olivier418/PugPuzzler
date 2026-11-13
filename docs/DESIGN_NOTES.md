@@ -1,8 +1,8 @@
-# Solver notes — what was measured, and what was left out
+# Design notes: why the solver is the way it is
 
-`SOLVER_WALKTHROUGH.md` explains how the solver works. This file is the other
-half: the decisions behind it, and the things that were built, measured and
-removed. Read it before adding any of them back.
+`SOLVER_WALKTHROUGH.md` explains how the solver works. This file covers the
+decisions behind it: what was measured, and the ideas that were built, tested
+and left out, so that anyone considering them again can see how they fared.
 
 Absolute timings on this laptop drift by up to 3x between runs, so every table
 below reports **node counts** alongside time, and the node counts are the
@@ -14,15 +14,15 @@ figures to trust. Timings are best-of-3, interleaved.
 
 A node branches on the scarcest **item**. An item is either an empty cell (try
 every placement covering it) or an unplaced block (try every placement of it).
-Either partitions the node's solutions — every solution covers a given cell
-exactly once, and places a given block exactly once — so either is sound alone.
+Either partitions the node's solutions: every solution covers a given cell
+exactly once, and places a given block exactly once, so either is sound alone.
 
 The two counts are directly comparable at 1:1, with no weight to tune: a child
 of either kind places exactly one block, so an equal candidate count means an
 equal branching factor *and* equal progress. (A weighted variant was measured on
 the old solver across `w` = 0.25 … 2. A mild block preference, `w` = 0.5–0.75,
-was a few percent better on three cases out of four and worse on the fourth —
-not worth a knob. Keying on each item's count *relative* to its count at the
+was a few percent better on three cases out of four and worse on the fourth,
+so not worth a knob. Keying on each item's count *relative* to its count at the
 root was worse everywhere, up to 5.5x: MRV's whole justification is that the
 candidate count **is** the branching factor, and a ratio does not bound it.)
 
@@ -52,14 +52,14 @@ for that reason.
 `_count_block`. Only the minimum matters, so a count gives up as soon as the
 item cannot beat the best so far. Cells have ~150 placements each while the
 running best is usually single digits, so the scan almost always stops after a
-handful of tests — this alone took MRV from 243k to ~400–500k nodes/s.
+handful of tests. This alone took MRV from 243k to ~400–500k nodes/s.
 
 **The obvious thing still not done** is maintaining the counts incrementally on
-top of the bitmask. The old NumPy solver did that — cheap per node, but paid for
+top of the bitmask. The old NumPy solver did that: cheap per node, but paid for
 by the conflict-list memory traffic that held it to 76k nodes/s. Doing it over
 bitmasks would be the best of both, and is where the next factor is.
 
-## 2. `order` — ranking a node's candidates
+## 2. `order`: ranking a node's candidates
 
 Sorting each node's candidates cannot change a full enumeration's node set at
 all: sibling order does not decide which nodes exist. It does find the first
@@ -67,7 +67,7 @@ solutions markedly sooner (time-to-first summed over both IQpuzzler books:
 0.37 s with, 0.60 s without, on the old solver). It also costs ~25% of runtime.
 
 So it is an option, defaulting to on exactly when `time_limit` or
-`max_solutions` is set — which is precisely when finding solutions early is
+`max_solutions` is set, which is precisely when finding solutions early is
 worth paying for.
 
 One implementation (`kernel.rank`) serves both branch kinds, and it is never
@@ -93,10 +93,9 @@ solution):
 
 No rule wins on every board, and plain table order (`False`) is best or close
 on most, so the two extra rules weren't worth their ~60 lines of kernel. Note
-that `counts` — what `order=None` picks when a limit is set — is also the
+that `counts` (what `order=None` picks when a limit is set) is also the
 slowest on three of the five by throughput; the default may deserve a second
-look. The trials are still in `benchmarks/` (config folders `order=pockets`,
-`order=fanout`).
+look.
 
 ---
 
@@ -106,7 +105,7 @@ look. The trials are still in `benchmarks/` (config folders `order=pockets`,
 branch on a *block*, group its placements into orbits under the group, search
 one representative per orbit, and produce the other members' solutions by
 transforming the representative's. `up_to_symmetry` yielded just the
-representatives — one solution per symmetry class.
+representatives: one solution per symmetry class.
 
 **It was correct.** Every solution places the branch block exactly once, so the
 branches partition the solutions, and a symmetry of the open region is a
@@ -116,7 +115,7 @@ solutions, 2 up to the rectangle's symmetry) and on self-symmetric fixtures.
 
 **Pros.**
 
-- Large on fully-empty boards — the only place a board-sized symmetry group
+- Large on fully-empty boards, the only place a board-sized symmetry group
   survives the first few placements.
 - `up_to_symmetry` was a genuine feature, not just a speedup, and it was exact
   and free: strictly less work than enumerating and de-duplicating.
@@ -127,7 +126,7 @@ solutions, 2 up to the rectangle's symmetry) and on self-symmetric fixtures.
 
 - **It did nothing on real puzzles.** Across all 221 book puzzles in both
   shipped games it moved the node count by at most 1.4%, and on PRO
-  `main_puzzles` not at all — identical to the unit, i.e. the reduction never
+  `main_puzzles` not at all: identical to the unit, i.e. the reduction never
   fired once.
 - It forced a Python-side "symmetric spine" above the kernel, with its own
   block-branching, orbit and transform machinery, because the orbit argument
@@ -135,7 +134,7 @@ solutions, 2 up to the rectangle's symmetry) and on self-symmetric fixtures.
   qualify; a cell's do not) plus `Setup.placement_lookup` and State transforms,
   none of which can exist inside the kernel.
 - ~500 lines across `solver.py`, `setup.py` and `lattice.py`, plus a 286-line
-  test file and this document's ancestor, to maintain for that.
+  test file, to maintain for that.
 
 Measured before removal, full enumeration per book:
 
@@ -167,14 +166,14 @@ Every real puzzle ties or gets faster; the two fully-empty standalone boards pay
 **If it is ever wanted back**, the cheap version is a post-filter:
 canonicalise each finished solution under the board's symmetry group and keep
 the first of each class. That needs only the geometry (`Lattice.point_group`
-and a region-symmetry search over it), not the orbit machinery — but it does
+and a region-symmetry search over it), not the orbit machinery, but it does
 strictly more work than enumerating, and it cannot be made exact under
 `max_solutions`, which is why it was not kept.
 
 ## 4. Removed earlier: partitioning into components
 
 Not a symmetry, but the same kind of question: what to do when the open region
-falls apart into connected components. Two variants were measured — **prune**
+falls apart into connected components. Two variants were measured: **prune**
 the node when the unplaced block sizes cannot be distributed over the component
 sizes, and **split**, which tiles the smallest component once, groups its
 tilings by the block set used, and solves the rest once per set.
@@ -193,7 +192,7 @@ Three reasons it does not transfer to an MRV search:
 - MRV already goes straight for a leftover pocket, whose cells are the scarcest
   on the board. Most splits cut off a 3–5 cell pocket that one block fills,
   which is exactly what the branch does anyway.
-- Splits come late — mostly 7–9 placements deep, where subtrees are small.
+- Splits come late, mostly 7–9 placements deep, where subtrees are small.
   Fewer than 100 of ~12,000 sampled splits happen within 4 placements, so
   checking only near the root finds almost nothing.
 - The check costs 11–28 µs against 70–100 µs of node work, so even PRO
@@ -206,7 +205,7 @@ Three reasons it does not transfer to an MRV search:
 
 The numbers in §4 and the weighted-branching numbers in §1 were measured on an
 earlier NumPy solver that maintained `live`/`counts` incrementally. It no longer
-exists — `pugpuzzler/classes/kernel.py` replaced it with a numba-compiled bitmask DFS on
+exists: `pugpuzzler/classes/kernel.py` replaced it with a numba-compiled bitmask DFS on
 2026-09-23, worth ~2.9x over a full enumeration of both games. Those figures are
 kept because the *reasoning* still holds; no absolute number in them is
 comparable to the current solver.
