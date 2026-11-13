@@ -20,23 +20,15 @@ class Puzzle:
         self.name = name
         self.difficulty = difficulty
 
-        # Where this Puzzle was loaded from (a classes.source.Source), set by
-        # the serialization.games_io loaders; None for one built by hand.
-        # solving.solve_puzzle/solve_puzzlebook save results under it.
+        # a Source, set by the serialization.games_io loaders; runs are saved under it
         self.source = None
 
-        # Compact -- shape (n_cells,), EMPTY on every one of the board's
-        # real cells: no OUTSIDE_BOARD cells are stored internally at all;
-        # those only reappear when expanding back to the full board shape
-        # (rendering, disk I/O).
-        self.grid = np.full(self.setup.n_cells, EMPTY)
+        self.grid = np.full(self.setup.n_cells, EMPTY)  # compact, see Setup.__init__
         self.chosen_placement_idx = {idx: UNPLACED for idx in self.blocks}
         if letter_grid is not None:
             self._initialize_grid(letter_grid)
 
-    # board/blocks/placements are read through the shared setup rather than
-    # duplicated as separate attributes, so there is exactly one place
-    # that owns them.
+    # read through the shared setup, never copied
     @property
     def board(self) -> Board:
         return self.setup.board
@@ -54,13 +46,8 @@ class Puzzle:
         return int((self.grid != EMPTY).sum())
 
     def _initialize_grid(self, letter_grid: np.ndarray) -> None:
-        # Internal convention (see classes.rendering.grid_lines): grids are
-        # shaped (width, depth). letter_grid, like boards.json's "cells",
-        # is authored the human-readable way -- one row per depth
-        # position, `width` entries per row, i.e. (depth, width) as
-        # written -- so it gets the same one-time transpose at this JSON
-        # boundary. See serialization.games_io._parse_board for the
-        # board-cells counterpart of this exact rule.
+        # Written (depth, width), one row string per depth position; internal
+        # grids are (width, depth). Same transpose as games_io._parse_board.
         arr = np.asarray(letter_grid).T
         if arr.shape != self.board.cells.shape:
             raise ValueError(f"letter_grid is not the same shape as the board in puzzle '{self.name}'.")
@@ -77,9 +64,7 @@ class Puzzle:
             mask = arr == letter
             if not mask.any():
                 continue
-            # mask is full board-shaped; grid is compact, so its cell indices
-            # are re-based through the same flat_to_compact mapping placements
-            # were computed with (both ascending, so rows compare directly).
+            # compact cell indices, ascending like each placement's, so rows compare directly
             placed_indices = self.setup.flat_to_compact[np.flatnonzero(mask)]
             valid_placements = self.placement_cells[idx]  # (N, block size)
             matching_rows = (
@@ -93,8 +78,7 @@ class Puzzle:
 
     def place_unchecked(self, block_idx: int, placement_idx: int):
         """Place a block without validating it first: the caller guarantees
-        the placement overlaps nothing and the block isn't placed yet (a
-        solution row, or a bound's realization, always does). Writes the
+        the placement overlaps nothing and the block isn't placed yet. Writes the
         grid and chosen_placement_idx together, so the two can't disagree."""
         self.grid[self.placement_cells[block_idx][placement_idx]] = block_idx
         self.chosen_placement_idx[block_idx] = placement_idx
@@ -111,10 +95,7 @@ class Puzzle:
         return solved
 
     def copy(self, rename=None):
-        # setup (board, blocks, placements) is immutable and shared by every
-        # puzzle in the book, so it's safe - and much cheaper - to share it
-        # by reference rather than deep-copying it. Only the actual
-        # per-instance mutable state (grid, chosen placements) is copied.
+        """A copy with its own grid and chosen placements, on the same Setup."""
         clone = copy.copy(self)
         clone.grid = self.grid.copy()
         clone.chosen_placement_idx = dict(self.chosen_placement_idx)
@@ -131,10 +112,8 @@ class Puzzle:
         return solve_rows(self, **options)
 
     def render(self, show_leftover: bool = True) -> str:
-        """Text representation used by __repr__: header + grid, plus
-        shape diagrams of any still-unplaced blocks underneath it.
-        `show_leftover=False` is used by PuzzleBook when printing every
-        puzzle in a book, where the per-puzzle legend is just noise."""
+        """Header + grid, plus (`show_leftover`) shape diagrams of the
+        still-unplaced blocks underneath."""
         leftover = None
         if show_leftover:
             leftover = [idx for idx, p in self.chosen_placement_idx.items() if p == UNPLACED]

@@ -132,41 +132,23 @@ def plot_puzzle_stats(
     ax: plt.Axes = None,
     labels: bool = True,
 ) -> plt.Axes:
-    """Scatter plot: one dot per puzzle in `stats`, colored by
-    difficulty. `x`, `y` (default `nr_filled_cells`, `nr_solutions`) and --
-    for a 3D plot -- `z` each name a per-puzzle quantity from METRICS (`nr_filled_cells`, `nr_solutions`,
-    `time_to_first_solution`, `time_to_last_solution`, `solve_time`), or
-    are a `Metric` of your own.
-    Metrics flagged `log` (counts, times) get a log axis, so their values
-    must be positive: a puzzle with no solutions has no time to its first
-    one, and one with zero solutions can't sit on a log axis, so both are
-    left out. A 3D axis can't be log-scaled, so there the values are
-    log10'd and the ticks labeled as powers of ten instead.
+    """Scatter plot: one dot per puzzle in `stats`, colored by difficulty
+    (see difficulty_color). `x`, `y` (default `nr_filled_cells`,
+    `nr_solutions`) and, for a 3D plot, `z` each name a METRICS entry or
+    are a `Metric` of your own. A puzzle whose value is undefined, or not
+    positive on a log axis, is left out. 3D can't log-scale, so there log
+    values are log10'd and ticked as powers of ten.
 
-    Difficulty and filled-cell count are read off each puzzle, found by
-    name in `puzzles` (any mapping covering every puzzle in `stats`, e.g.
-    the PuzzleBook from load_run_books or the book that was solved); the solution
-    count and timings come from `stats`.
+    Difficulty and filled cells are read off each puzzle, found by name in
+    `puzzles` (any mapping covering `stats`); counts and timings come from
+    `stats`. Puzzles on the same point (values and color) share one dot
+    labeled with all their names (`labels=False` leaves names off); in 2D
+    the labels are moved apart to stay readable.
 
-    Puzzles that land on the same point (same values, same color) are
-    drawn as one dot labeled with all their names, since they'd otherwise
-    hide each other. Near-ties, and ties with an overlaid plot's dots, stay
-    as they are, but 2D labels are moved apart so they stay readable.
-
-    compute_puzzle_bounds' own tags (HARDEST_DIFFICULTY,
-    EASIEST_DIFFICULTY) are colored from constants.BOUND_COLORS rather
-    than constants.DIFFICULTY_COLORS, since they aren't the game's own
-    difficulty tiers.
-
-    `labels=False` leaves the puzzle names off.
-
-    Pass an existing `ax` to overlay on it rather than starting a fresh
-    plot. The axes are the plot's, not the call's: an `ax` this function
-    made already knows its metrics, so an overlay needs no `x`/`y`/`z` (and
-    naming a different one raises rather than silently mixing quantities);
-    its legend is extended with any difficulty it lacks rather than being
-    rebuilt. A 3D `ax` from elsewhere needs `z`.
-    """
+    Pass an existing `ax` to overlay on it: an ax this function (or
+    plot_bounds) made knows its metrics, so `x`/`y`/`z` are inherited and
+    naming a different one raises; its legend is extended, not rebuilt.
+    A 3D `ax` from elsewhere needs `z`."""
     given = [None if m is None else _resolve(m) for m in (x, y, z)]
     inherited = getattr(ax, "_puzzle_stats_metrics", None)
     if inherited is not None:

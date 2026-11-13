@@ -1,10 +1,5 @@
-"""Terminal rendering for boards/blocks -- kept separate from `Setup`
-(classes/setup.py) since this is a display concern, not part of the
-board/blocks/placements model itself. `Setup.render` is a thin
-delegator to `render` below; everything here operates on plain
-`Board`/`BlockCollection`/grid arguments so it has no dependency on
-`Setup` itself.
-"""
+"""Terminal rendering of boards and blocks, on plain Board/BlockCollection/
+full-grid arguments (no Setup; Setup.render is the compact-grid facade)."""
 import numpy as np
 from colorama import Style
 
@@ -35,9 +30,7 @@ def grid_lines(
     letters: bool = True,
     mark: tuple = None,
 ) -> list[str]:
-    """Render any grid shaped like `board` (a puzzle's, a solution's)
-    into a list of terminal-ready row strings (one per output row,
-    already colored).
+    """A full grid shaped like `board` as colored terminal lines.
 
     Options (solver_trace uses them to show the search's live counts):
     `labels`, a board-shaped array of plain strings, drawn right-aligned
@@ -123,12 +116,9 @@ def grid_lines(
 
 
 def block_shape_lines(block: Block) -> tuple[list[str], int]:
-    """Render a single block's own shape (from its `coords`, not any
-    board) as a small standalone diagram: same 2-char-per-cell,
-    colored-letter style as `grid_lines`, but a tight bounding box with
-    no board border/corner-drawing. Returns the lines plus their width
-    in cells (not raw string length, since colorama escape codes make
-    raw length meaningless for alignment)."""
+    """A block's own shape as a small diagram in `grid_lines`' style, in a
+    tight bounding box without a border. Returns the lines and their width
+    in cells (color codes make the raw string length useless)."""
     coords = block.coords - block.coords.min(axis=0)
     extent = coords.max(axis=0) + 1
     width, depth, height = (list(extent) + [1, 1])[:3]
@@ -158,9 +148,7 @@ def block_shape_lines(block: Block) -> tuple[list[str], int]:
 
 
 def legend_lines(blocks: BlockCollection, block_idcs) -> list[str]:
-    """Arrange the shape diagrams of several blocks (e.g. a puzzle's
-    unplaced blocks) side by side in one row, used to lay unplaced blocks
-    out underneath the board."""
+    """The shape diagrams of `block_idcs` side by side in one row."""
     entries = [block_shape_lines(blocks[idx]) for idx in sorted(block_idcs)]
     if not entries:
         return []
@@ -181,11 +169,9 @@ def render(
     letters: bool = True,
     mark: tuple = None,
 ) -> str:
-    """Build the full text representation used by every `__repr__` that
-    displays a board: an optional header, then the board, and -- when
-    `leftover_idcs` is given -- shape diagrams of those blocks laid out
-    underneath the board. `labels`, `cell_width`, `letters`, `mark`:
-    see grid_lines."""
+    """An optional header, the board, and the shape diagrams of
+    `leftover_idcs` (if any) underneath. `labels`, `cell_width`,
+    `letters`, `mark`: see grid_lines."""
     lines = grid_lines(board, blocks, grid, labels, cell_width, letters, mark)
 
     if leftover_idcs:

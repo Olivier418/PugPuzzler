@@ -8,22 +8,11 @@ from pugpuzzler.constants import CONFIG_PALETTE
 
 def _poisson_rate(runs: list[tuple[np.ndarray, float]]) -> float:
     """Maximum-likelihood rate of a homogeneous Poisson process observed
-    over the trials in `runs`: total solutions divided by total observed
-    time, pooled across trials.
-
-    This is the textbook estimator for a counting process, and it answers
-    the "what about the gaps?" question by construction -- the quiet
-    stretches between solutions are never sampled or fitted, they're
-    simply part of the denominator. Every second of observation carries
-    equal weight (unlike a least-squares fit to the cumulative curve,
-    which weights late time by t), and the resulting line lambda*t passes
-    exactly through each trial's endpoint (D, N), so the trendline ends
-    where the measured curve ends.
-
-    A trial that exhausted its search space early contributes only its own
-    (shorter) duration: we never observed it failing to produce solutions
-    after that, because there were none left to produce.
-    """
+    over the trials in `runs`: total solutions / total observed time,
+    pooled across trials. Every second of observation weighs the same, gaps
+    between solutions included, and a trial that ran out of solutions
+    early counts only its own duration. The line rate*t passes through the
+    trials' mean endpoint (mean duration, mean count)."""
     n_solutions = 0
     total_time = 0.0
     for times, duration in runs:
@@ -38,12 +27,11 @@ def plot_benchmark(
     trials: dict[ConfigKey, list[SolveStats]],
     show_trendline: bool = True,
 ):
-    # t_max (the plot's time ceiling) has to come from how long each trial
-    # actually ran, not from the timestamp of the last solution found --
-    # a trial that times out at T can easily go quiet for a while before
-    # the kill, so its last *solution* lands well before T even though
-    # the search itself ran the full T seconds. The longest duration is
-    # the benchmark's T whenever any trial timed out.
+    """Each trial's cumulative solutions over time (faint steps), each
+    config's average (bold) and, with `show_trendline`, its Poisson rate
+    (dashed, see _poisson_rate)."""
+    # The time axis ends at the longest duration (T if any trial timed out),
+    # not the last solution: a search can go quiet long before it stops.
     all_durations = [stats.duration for runs in trials.values() for stats in runs]
     t_max = max(all_durations) if all_durations else 1.0
 
@@ -64,16 +52,12 @@ def plot_benchmark(
             times = np.asarray(stats.elapsed, dtype=float)
             times = times[times <= t_max]
 
-            # N(t) counts solutions found *up to and including* t, so the
-            # i-th solution (0-based) takes the curve to i+1, and the curve
-            # sits at 0 until the first one -- hence the explicit (0, 0)
-            # anchor and the 1-based counts.
+            # N(t) = solutions found up to and including t, from (0, 0)
             step_x = np.concatenate(([0.0], times, [duration]))
             step_y = np.concatenate(([0.0], np.arange(1, times.size + 1), [times.size]))
             ax.step(step_x, step_y, where='post', color=c, alpha=0.15)
 
-            # side='right' yields "number of solution times <= t", which is
-            # N(t) itself.
+            # side='right': the number of solution times <= t, i.e. N(t)
             grid_counts.append(np.searchsorted(times, time_grid, side='right'))
             fit_runs.append((times, duration))
 
@@ -84,12 +68,6 @@ def plot_benchmark(
         if show_trendline:
             rate_estimate = _poisson_rate(fit_runs)
             if rate_estimate > 0:
-                # Drawn across the whole window, not just out to the last
-                # solution: the trendline is a claim about the rate over
-                # the budgeted time, so it should be visible wherever the
-                # measured curve is. Because the rate is N/D, this line
-                # lands on each trial's final count at that trial's own
-                # duration rather than floating above or below it.
                 ax.plot(time_grid, rate_estimate * time_grid, color=c, linestyle='--', alpha=0.7, label='_nolegend_')
                 final_max_y = max(final_max_y, rate_estimate * t_max)
 

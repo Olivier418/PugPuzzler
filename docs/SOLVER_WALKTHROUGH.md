@@ -16,9 +16,6 @@ placement fit" is `pmask[gid] & occ == 0`, one AND. Nothing is maintained
 incrementally; counts are recomputed when a rule asks for them, capped so the
 scan stops as soon as a candidate cannot win.
 
-The solver uses no symmetry reduction and does not split the board into
-components. `DESIGN_NOTES.md` explains why not.
-
 ---
 
 ## 1. The five nouns
@@ -113,9 +110,8 @@ depth, here are the moves, here is how far through them I am."
 
 ## 4. `kernel.kernel()`: the search loop
 
-This is the part worth reading slowly. It is one `while True` with four
-branches, and it is iterative rather than recursive for two reasons: numba's
-recursion support segfaulted on it, and an explicit stack can be **paused and
+The search loop is essentially one `while True` with four
+branches, and it is iterative rather than recursive. This way, it can be **paused and
 resumed**, which is what lets the Python side stay a lazy generator with an
 exact time limit.
 
@@ -219,11 +215,6 @@ Two MRV scans, each capped at the best count so far, returning `(kind, index)`.
 | `"cell"` | the empty cell with the fewest live placements |
 | `"block"` | the unplaced block with the fewest |
 | `"both"` **(default)** | whichever of the two is scarcer; cells scanned first, so a cell wins a tie |
-
-**Why the two counts are comparable at 1:1.** A child of either kind places
-exactly one block, so an equal candidate count means an equal branching factor
-*and* equal progress, so `"both"` is a plain minimum and needs no weighting.
-`DESIGN_NOTES.md` §1 compares the three modes.
 
 `"block"` alone exists as a baseline: it cannot see an uncoverable cell until
 some block runs out of room, so it prunes almost nothing where little is

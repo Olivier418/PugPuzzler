@@ -49,10 +49,8 @@ def _parse_board(data: dict) -> Board:
 
     if board_type == "RegularBoard":
         if "cells" in data:
-            # Authored like a puzzle's letter grid, one row string per depth
-            # position ("X" = cell), i.e. (depth, width) as written; the
-            # internal convention is (width, depth), so it gets the same
-            # one-time transpose Puzzle._initialize_grid gives a letter grid.
+            # row strings ("X" = cell), written (depth, width) like a letter
+            # grid; transposed to the internal (width, depth)
             return RegularBoard(cells=(parse_letter_grid(data["cells"]) == "X").T)
         return RegularBoard(width=data["width"], depth=data["depth"], height=data.get("height"))
 
@@ -83,14 +81,10 @@ def _setups(game_dir: Path) -> dict[str, Setup]:
 
 def load_setups(game_dir: Path | str) -> dict[str, Setup]:
     """{board_key: Setup} for every board of a game folder, all over the
-    game's one BlockCollection.
-
-    Built once per game folder per process: everything loaded from a game
-    (load_game, results_io.load_run_books, ...) shares the same Setup
-    objects, so a puzzle loaded with a run and the Game you loaded yourself
-    are on the very same Setup -- which Game.board_key, and so save_bounds /
-    save_puzzlebook, match by identity. games/ never changes, so the cache
-    can't go stale."""
+    game's one BlockCollection. Cached per game folder per process, so
+    everything loaded from a game (load_game, load_run_books, ...) is on
+    the very same Setups, which Game.board_key matches by identity.
+    games/ never changes, so the cache can't go stale."""
     return dict(_setups(Path(game_dir).resolve()))
 
 
@@ -180,7 +174,7 @@ def load_puzzle(json_file: Path | str, game: Game) -> Puzzle:
 
 
 def load_game(dir_path: Path | str) -> Game:
-    """Auto-discover and load blocks, boards, puzzlebooks, and standalone puzzles."""
+    """The game in `dir_path`: its Setups, every books/*.json and every puzzles/*.json."""
     dir_path = Path(dir_path)
     setups = load_setups(dir_path)
     books = [load_book(dir_path, f.stem, setups) for f in sorted((dir_path / "books").glob("*.json"))]

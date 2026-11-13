@@ -1,9 +1,8 @@
 """Solving puzzles and packaging the outcome: run the solver over a Puzzle /
 PuzzleBook, time it, wrap the results in Solution/SolveStats and (opt-in,
 `save_solutions`/`save_stats`) save them to a folder mirroring where the
-puzzle was loaded from. Every solve here is timed by timed_solve, on the
-solver's fast rows path. Sits above both `classes` (the data model) and
-`serialization` (disk I/O), so neither has to import the other."""
+puzzle was loaded from. Every solve here is timed by timed_solve. Sits
+above both `classes` and `serialization`, so neither imports the other."""
 import math
 import time
 from enum import IntEnum
@@ -123,22 +122,18 @@ def solve_puzzle(
     progress: bool = False,
     **options,
 ) -> tuple[Solution, SolveStats]:
-    """Solve a single Puzzle and save the solved grids (`save_solutions`)
-    and/or the run's SolveStats (`save_stats`) to a folder mirroring where
-    the Puzzle itself was loaded from, under `solutions_root` (e.g.
-    games/IQpuzzler/puzzles/empty_main ->
-    solutions/IQpuzzler/puzzles/empty_main/result_<idx>/{solutions,stats}.json).
+    """Solve a single Puzzle and, opt-in, save the solutions
+    (`save_solutions`) and/or the SolveStats (`save_stats`) to a folder
+    mirroring where the Puzzle was loaded from, under `solutions_root`
+    (games/IQpuzzler/puzzles/empty_main ->
+    <solutions_root>/IQpuzzler/puzzles/empty_main/result_<idx>/). The flags
+    are independent: the grids are the bulk of a save.
 
-    Saving is off by default; the two flags are independent, since the
-    grids are the bulk of a save and the stats are useful without them.
-    `verbose` (see Verbosity) controls progress printing, `progress` shows
-    a bar of solutions found. `time_limit` (seconds) and `max_solutions`
-    stop the solve early, whichever is hit first (both default to
-    infinity; not recorded in the SolveStats -- `complete` says the run
-    was cut short). They are named here rather than left in `options`
-    because they change which solutions come back, not how they are found.
-    `options` are forwarded to the solver and recorded in the SolveStats.
-    """
+    `verbose` (see Verbosity) controls printing, `progress` shows a bar of
+    solutions found. `time_limit` (seconds) and `max_solutions` stop the
+    solve early; they aren't recorded (`complete` says the run was cut
+    short) and aren't `options`, since they change which solutions come
+    back. `options` are forwarded to the solver and recorded."""
     rows, stats = timed_solve(
         puzzle, seed=seed, verbose=verbose, time_limit=time_limit, max_solutions=max_solutions,
         progress=progress, **options,

@@ -15,16 +15,10 @@ from pugpuzzler.constants import BENCHMARK_DIR, TIME_DECIMALS
 from pugpuzzler.serialization import load_stats, next_run_dir, write_stats
 
 
-# A config is the dict of keyword options handed to the solver (besides the
-# seed): `branch` and `order` (see solver.solve_rows). An empty config means
-# the solver's own defaults -- so {"branch": "cell"} is the cells-only
-# baseline, not {}. Note that a benchmark trial always sets a time limit, so
-# `order` defaults to on.
-#
-# Only options that leave the solution set alone belong here; anything that
-# changes *which* solutions come back (time_limit, max_solutions) would make
-# two configs solve different problems, so those are named arguments on
-# solve_puzzle instead.
+# A config is the dict of solver keyword options besides the seed (`branch`,
+# `order`; see solver.solve_rows); {} means the solver's defaults. A trial
+# always sets a time limit, so `order` defaults to on. Only options that leave
+# the solution set alone belong here (not time_limit/max_solutions).
 DEFAULT_CONFIGS = (
     {"order": True},
     {"order": False},
@@ -58,28 +52,16 @@ _GRACE_SECONDS = 1.0
 
 
 def _worker(puzzle: Puzzle, config: dict, seed: int, T: float, conn):
-    """Runs in a subprocess so a runaway search (e.g. every flag off on a
-    puzzle with a huge search space) can be killed on a wall-clock
-    deadline -- something a plain generator loop in the main process
-    can't do safely.
+    """One trial, in a subprocess so a runaway search can be killed on a
+    wall-clock deadline.
 
-    Spawning a subprocess (reimporting numpy/matplotlib/etc. in the fresh
-    interpreter, and unpickling `puzzle`) takes real time that has nothing
-    to do with the solver, so the worker only starts its clock once that is
-    behind it: it sends a "ready" handshake, and times every solution from
-    that moment -- the same moment the parent starts its own clock and T.
-    It solves on the fast rows path (Puzzle.solve_rows, as solving.timed_solve
-    does, so benchmark and solve times compare), stamps each solution, and
-    sends the stamps in batches ("solutions", [elapsed, ...]) at most every
-    _BATCH_SECONDS, never the solutions themselves: a benchmark never keeps
-    them, and pickling one message per solution would be billed as search
-    time. It ends with ("done", (duration, complete)) -- `complete` being
-    whether the search ran to the end. The solver is handed
-    `time_limit=T`, so it normally stops by itself a hair after T; the
-    parent's kill is only the backstop.
-    """
+    Startup (spawn, imports, unpickling `puzzle`, warmup) is kept off the
+    clock: the worker sends "ready" and times from then, the moment the
+    parent starts T. It solves with Puzzle.solve_rows, as timed_solve does,
+    and sends only the solution stamps, ("solutions", [elapsed, ...]) at
+    most every _BATCH_SECONDS, then ("done", (duration, complete)). It is
+    given `time_limit=T`, so the parent's kill is only the backstop."""
     try:
-        # Numba's cache load is startup cost too; get it behind "ready".
         puzzle.setup.warmup()
         conn.send(("ready", None))
         start = last_send = time.perf_counter()
@@ -119,12 +101,8 @@ def _run_single_test(puzzle: Puzzle, config: dict, seed: int, T: float) -> Solve
     process.start()
     child_conn.close()
 
-    # Block until the worker's "ready" handshake, i.e. until subprocess
-    # spawn + module reimport + unpickling `puzzle` is behind it -- only
-    # then does the clock start, so that startup cost (the ~1s of
-    # apparent "dead time" before the first solution) isn't mistaken for
-    # search time. Capped generously (well beyond T) so a worker that
-    # dies before ever sending anything can't hang the benchmark.
+    # Wait for "ready" (startup off the clock), capped so a worker that dies
+    # before sending anything can't hang the benchmark.
     SETUP_TIMEOUT = max(T, 5.0) + 30.0
     setup_error = None
     if parent_conn.poll(SETUP_TIMEOUT):
@@ -190,16 +168,11 @@ def run_benchmark(
 ) -> tuple[dict[ConfigKey, list[SolveStats]], Path]:
     """Run nr_tests trials (seeds 0..nr_tests-1) of each config on puzzle,
     each capped at T seconds. Every trial's SolveStats is saved as
-    base_folder/<game>/<books|puzzles>/<puzzle-or-book_puzzle>/benchmark_<idx>/<config-label>/stats<seed>.json
-    -- mirroring where the puzzle itself lives under games/, same as
-    solutions/ does -- with one benchmark_<idx> folder per call, so
-    re-running the same puzzle never overwrites an earlier run and you
-    can tell separate simulations apart at a glance.
+    <base_folder>/<Source.relative_dir()>/benchmark_<idx>/<config label>/stats<seed>.json,
+    a new benchmark_<idx> per call.
 
-    Returns the trials in memory, grouped by config (see config_key), so
-    they can go straight into plot_benchmark without a reload -- plus the
-    run folder itself, so it can be handed straight to load_benchmark later.
-    """
+    Returns the trials grouped by config (see config_key), ready for
+    plot_benchmark, and the benchmark_<idx> folder, for load_benchmark."""
     # Compile once here, so the trial subprocesses only load the cache.
     puzzle.setup.warmup()
 
@@ -223,11 +196,9 @@ def run_benchmark(
 
 
 def load_benchmark(folder: str | Path) -> dict[ConfigKey, list[SolveStats]]:
-    """Reload a benchmark previously written by run_benchmark, without
-    re-solving anything: the trials grouped by config (in config-folder
-    order), each group in seed order. `folder` is the run's own folder --
-    the one directly containing each config's subfolder -- i.e. exactly
-    the path run_benchmark returned."""
+    """The trials run_benchmark saved in `folder` (the benchmark_<idx> folder
+    it returned), grouped by config in config-folder order, each group in
+    seed order."""
     trials: dict[ConfigKey, list[SolveStats]] = {}
     for file in sorted(Path(folder).glob("*/stats*.json")):
         for stats in load_stats(file).values():

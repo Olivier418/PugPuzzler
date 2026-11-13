@@ -9,16 +9,12 @@ class PuzzleBook(UserDict):
         if not puzzles:
             raise ValueError(f"A PuzzleBook needs at least one puzzle (book {name!r} is empty).")
         _assert_unique(puzzles, lambda p: p.name, "puzzle name")
-        # Every puzzle in a book is built on one shared Setup (that's the
-        # whole point -- see Setup's docstring), which the book exposes.
-        self.setup: Setup = puzzles[0].setup
+        self.setup: Setup = puzzles[0].setup  # shared by all of them, see Setup
         if any(p.setup is not self.setup for p in puzzles):
             raise ValueError(f"The puzzles of book {name!r} aren't all on the same Setup.")
         self.name = name
 
-        # Same idea as Puzzle.source: where this book was loaded from, if
-        # anywhere. Set by the serialization.games_io loaders.
-        self.source = None
+        self.source = None  # a Source, set by the serialization.games_io loaders
 
         super().__init__({p.name: p for p in puzzles})
 

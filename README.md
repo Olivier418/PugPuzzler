@@ -10,17 +10,16 @@
 
 It started as a project to investigate the difficulty of such games, but grew into a more general tool along the way. PUGpuzzler supports:
 
-- 2-dimensional and 3 dimensional puzzles
+- 2D and 3D puzzles
 - puzzles on rectangular and offset (pyramid) lattices
 - easy loading and saving of new puzzles
-- tools for investigating the puzzles and their solutions 
-
+- tools for investigating the puzzles and their solutions
 
 ## Why
 
-As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler** from SmartGames. 
+As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler** from SmartGames.
 
-A few years ago, I started wondering whether the prescribed puzzles from the booklet were actually as difficult it could get. To answer this, I tried to write a solver for this game in Python. It worked, but it was too slow and I did not manage to make it fast enough with the limited knowledge I had then. Since it was not able to answer my question, I abandoned it. 
+A few years ago, I started wondering whether the prescribed puzzles from the booklet were actually as difficult as it could get. To answer this, I tried to write a solver for this game in Python. It worked, but it was too slow and I did not manage to make it fast enough with the limited knowledge I had then. Since it was not able to answer my question, I abandoned it.
 
 Recently, I picked it up again and rewrote it from scratch, this time generalizing it to 3D puzzles and other variants. Along the way, I gained some other interesting insights, which I thought were worth sharing as a fun read.
 
@@ -28,17 +27,21 @@ Recently, I picked it up again and rewrote it from scratch, this time generalizi
 
 The tutorials run the solver on the puzzle booklets of **IQpuzzler** (the original) and **IQpuzzlerPRO** (the sequel, with a flat board, a diagonal one and a 3D pyramid), and ask what the puzzles themselves look like:
 
-1. **How many solutions do the puzzles have?** This depends on the game; the number of solutions to a puzzle of IQpuzzler ranges between 1 and over a thousand. On the other hand, the IQpuzzlerPRO promises a unique solution to each puzzle, and this is nearly true: all but one of its 120 puzzles are unique. Pyramid puzzle 120 has five.
-2. **How is the difficulty of the puzzles determined?** By how many cells are given, not by how many solutions there are: the tiers follow the filled cells, and the number of solutions does not seem to correlate to the difficulty (for IQpuzzler).
-3. **Do there exist puzzles harder than those in the booklets?** Yes: for example, the IQpuzzler board can force a unique solution using just two pieces (7 cells), while the booklet never gives fewer than three (13 cells).
+1. **How many solutions do the puzzles have?** This depends on the game; the number of solutions to a puzzle of IQpuzzler ranges between 1 and over a thousand. On the other hand, IQpuzzlerPRO promises a unique solution to each puzzle, and this is nearly true: all but one of its 120 puzzles are unique. Pyramid puzzle 120 has five.
+2. **How is the difficulty of the puzzles determined?** Mostly by how many cells are given, not by how many solutions there are, but not consistently: on IQpuzzler's main board the tiers follow the filled cells and the number of solutions does not correlate with them, yet on the pyramid and on IQpuzzlerPRO some puzzles have more cells given than easier ones.
+3. **Do there exist puzzles harder than those in the booklets?** Yes: for example, the IQpuzzler board can force a unique solution using just two pieces (7 cells), while the booklet never gives fewer than three (12 cells).
 
+<p align="center">
+  <img src="assets/bounds.png" alt="IQpuzzler main board: the fewest and most solutions possible for each number of filled cells, with the booklet's puzzles inside the band" width="600">
+</p>
+
+*The IQpuzzler main board: for every number of filled cells, the fewest and the most solutions a puzzle can have (dashed lines; the shaded areas are unreachable), with the booklet's 72 puzzles colored by tier.*
 
 ## Tutorials
 
-
 The best way to see how it all works is to run the two notebooks in [tutorial/](tutorial/). Everything in them is computed when you run it.
 
-1. [1_solver.ipynb](tutorial/1_solver.ipynb): the algorithm: how a game is represented and how the search works, followed by an exemplary solve with a puzzle small enough to follow node by node. 
+1. [1_solver.ipynb](tutorial/1_solver.ipynb): the algorithm: how a game is represented and how the search works, followed by a worked example with a puzzle small enough to follow node by node.
 2. [2_findings.ipynb](tutorial/2_findings.ipynb): the applications: the questions above, answered on the real puzzle booklets.
 
 For the code itself, [SOLVER_WALKTHROUGH.md](docs/SOLVER_WALKTHROUGH.md) goes through the solver, and [DESIGN_NOTES.md](docs/DESIGN_NOTES.md) has the measurements behind each design choice, including the ideas I tried and removed.
@@ -46,11 +49,11 @@ For the code itself, [SOLVER_WALKTHROUGH.md](docs/SOLVER_WALKTHROUGH.md) goes th
 ## Quick start
 
 ```
-pip install -e .
+pip install -e ".[notebooks]"
 python run_tests.py
 ```
 
-Install it editable (`-e`): the package reads `games/` from this checkout.
+Install it editable (`-e`): the package reads `games/` from this checkout. The `notebooks` extra adds Jupyter for the tutorials; leave it out (`pip install -e .`) if you only need the package.
 
 Solve a booklet puzzle and print its solutions:
 
@@ -63,13 +66,11 @@ game = load_game(GAMES_DIR / "IQpuzzler")
 solutions, stats = solve_puzzle(game.books["main_puzzles"]["50"], verbose=Verbosity.SHOW_SOLUTIONS)
 ```
 
-A game lives in `games/<Game>/`: `blocks.json`, `boards.json`, and optional `books/` and `puzzles/` folders. `CLAUDE.md` has a full map of the codebase.
+A game lives in `games/<Game>/`: `blocks.json`, `boards.json`, and optional `books/` and `puzzles/` folders.
 
 ## On agentic coding, and the name
 
 With the help of agentic coding, this task turned out to be far less daunting than it looked. As the project went on, I leaned more and more on LLMs for advice on architecture, cleaning up code and running tests. But unlike with my first attempt years ago, I could feel that I didn't have a full grasp of what the code was doing. I understood the individual parts, but the full picture was slipping away from me. Near the end of the project, I came across [this video](https://youtu.be/0Ge3jKLDJaA) from 3Blue1Brown creator Grant Sanderson.
-
-
 
 It resonated with me. Before this project, I felt I had a deeper understanding of the code I produced, and now I found myself placing more trust in these agentic models. I was starting to identify more with the pug than the border collie. Hence the name: PUGpuzzler (Packing Under Geometry being the respectable reading).
 
@@ -80,3 +81,5 @@ This is a personal project, not a polished tool, and it isn't unique either. Man
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+IQpuzzler and IQpuzzlerPRO are trademarks of SmartGames. This project is not affiliated with or endorsed by SmartGames; the puzzle data in `games/` is included for research and educational use.

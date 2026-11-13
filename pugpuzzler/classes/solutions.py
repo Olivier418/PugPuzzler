@@ -7,17 +7,11 @@ from .setup import Setup
 
 
 class SolveStats(NamedTuple):
-    """Metadata about the solver run that produced a Solution -- kept
-    separate from Solution itself since the solver is exhaustive: the
-    solutions are deterministic, but how long it took / which solver
-    options+seed were used is a property of the run, not of the
-    solutions. `options` is whatever keyword arguments the solver was
-    given besides the seed (`branch`, `order`; kept so runs of different
-    solver variants can be told apart and compared by benchmark.py).
-
-    `complete` says whether the run found every solution: True if the
-    search ran to the end, False if `time_limit`/`max_solutions` cut it
-    short (see solver.solve_rows' return value)."""
+    """How one solver run went -- a property of the run, not of the
+    solutions, so kept apart from Solution. `options` = the solver keyword
+    arguments besides the seed (`branch`, `order`), so benchmark.py can
+    tell variants apart. `complete` = the search ran to the end, rather
+    than being cut short by `time_limit`/`max_solutions`."""
     puzzle_name: str
     options: dict
     seed: int | None
@@ -27,20 +21,14 @@ class SolveStats(NamedTuple):
 
 
 class Solution:
-    """One Puzzle's solutions: the Puzzle itself plus every solution as a
-    row -- the placement index of every block, in the Setup's block order
-    (see solver.solve_rows), the solver's own form and ~20x smaller than a
-    grid. Grids exist only at the edges: `grids` builds them on demand
-    (full board-shaped, see Setup.rows_to_grids), solutions.json stores
-    them as letters, and printing renders them.
+    """One Puzzle's solutions: the Puzzle plus every solution as a row (each
+    block's placement index, in block order; see solver.solve_rows) -- the
+    solver's own form, ~20x smaller than a grid. Grids exist only at the
+    edges: `grids`, solutions.json and printing.
 
-    The Puzzle is always live -- the one solving.py solved, or the one
-    serialization.load_run_books found in games/ -- so everything
-    about it (name, difficulty, filled cells, Setup) is read off it rather
-    than copied here, where it could drift.
-
-    A book's solutions (or stats) are just a dict keyed by puzzle name.
-    Producing one (solving + saving) lives in `solving.py`."""
+    The Puzzle is the live one (solved, or found in games/ by
+    load_run_books), so name, difficulty, filled cells and Setup are read
+    off it rather than copied here."""
 
     def __init__(self, puzzle: Puzzle, rows: np.ndarray):
         self.puzzle = puzzle
@@ -51,8 +39,8 @@ class Solution:
 
     @property
     def grids(self) -> np.ndarray:
-        """Every solution as a full board-shaped grid, (k, *board shape) --
-        built on each access, at ~550 bytes a grid."""
+        """Every solution as a full board-shaped int64 grid, (k, *board
+        shape) -- built on each access (440 bytes a grid on IQpuzzler main)."""
         return self.setup.rows_to_grids(self.rows)
 
     @property

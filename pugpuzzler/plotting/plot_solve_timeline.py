@@ -11,24 +11,14 @@ from .plot_puzzle_stats import difficulty_color, solved_puzzles, style_2d
 
 def plot_solve_timeline(puzzles: Mapping[str, Puzzle], stats: Mapping[str, SolveStats]) -> plt.Figure:
     """Timeline plot: one row per difficulty (the game's tiers, then the
-    bounds' tags), one column per puzzle, y = time (log scale, shared by
-    every row). A thin gray horizontal line marks every solution found;
-    the first solution for each puzzle is drawn thicker, in the puzzle's
-    difficulty color. A faint, difficulty-colored rectangle behind each
-    column's lines spans the full time the solver ran on that puzzle
-    (stats[name].duration) -- not just the window between its first and
-    last solution, since the solver may keep searching after the last
-    solution was already found. Every row starts at the left edge and
-    spans as many column slots as the largest tier, so all columns are
-    the same width and line up across rows; within a row, puzzles keep
-    the order they have in `stats` (e.g. their source JSON's), rather
-    than names sorted as strings ("10" before "2").
+    bounds' tags), one column per puzzle in `stats` order, y = time (log,
+    shared). Every solution is a thin gray line, the first a thick one in
+    the difficulty's color, over a faint bar spanning the whole solve
+    (`duration`). Every row has as many column slots as the largest tier,
+    so columns are equal width and left-aligned.
 
-    Timing (duration/elapsed) comes from `stats`. Difficulty is read off
-    each puzzle, found by name in `puzzles` (any mapping covering every
-    puzzle in `stats`, e.g. the PuzzleBook from load_run_books or the book that
-    was solved); colors are plot_puzzle_stats'.
-    """
+    Difficulty is read off each puzzle, found by name in `puzzles` (any
+    mapping covering `stats`); colors are plot_puzzle_stats'."""
     if not stats:
         raise ValueError("plot_solve_timeline needs at least one solved puzzle.")
     difficulty_by_name = {p.name: p.difficulty for p in solved_puzzles(puzzles, stats)}

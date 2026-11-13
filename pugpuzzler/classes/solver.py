@@ -45,11 +45,8 @@ def _resolve_rules(seed, time_limit, max_solutions, order, branch):
     if order is True:
         rank_rule = kernel.RANK_COUNTS
     elif order is False:
-        # With no ranking at all a seed would be a no-op: the kernel
-        # picks the branch item by an argmin the seed never touches.
-        # Sorting by the drawn priority alone keeps the documented
-        # promise that a seed randomises arrival order, at almost no
-        # cost.
+        # Unranked, a seed would do nothing (the branch argmin never sees
+        # it), so a seeded run sorts by its drawn priority alone.
         rank_rule = kernel.RANK_PRIORITY if seed is not None else kernel.RANK_NONE
     else:
         raise ValueError(f"order={order!r}; expected True, False or None.")
@@ -94,60 +91,42 @@ def solve_rows(
 
     `time_limit` (seconds, counted from the first `next()`) and
     `max_solutions` both default to infinity; the search stops as soon
-    as either is reached. The kernel is never told `max_solutions`: it
-    gets a solution-buffer cap and a node budget, returns FULL/BUDGET/DONE,
-    and is re-entered with its stack intact. An EMA of nodes/s sizes ~2 ms
-    chunks, which is how `time_limit` stays exact to ~2 ms and how the
-    generator stays abandonable mid-tree.
+    as either is reached. The kernel runs in ~2 ms chunks (sized by an
+    EMA of nodes/s), so `time_limit` is exact to ~2 ms and the generator
+    can be abandoned mid-tree.
 
-    `seed` randomises the order solutions are found in without
-    changing the set: it draws one random priority per placement,
-    used only to break ties the search's own ordering leaves open.
-    Unseeded, ties fall to placement index order. Nothing is ever
-    reordered or shared, so a seed can't disturb anything indexed by
-    placement.
+    `seed` randomises the order solutions are found in, never the set:
+    one random priority per placement breaks the ties the ranking leaves.
 
     Every node branches on one *item* and tries every placement that
-    settles it, so the branches partition the node's solutions:
-    nothing is missed and nothing is found twice. `branch` picks which
-    kind of item, and only affects speed:
+    settles it, so the branches partition the node's solutions. `branch`
+    picks which kind of item, and only affects speed:
 
     - "both" (the default): whichever of the two below has fewer live
-      placements at this node. The counts are directly comparable --
-      a child of either kind places exactly one block -- so this is
-      simply better informed than either alone, and it wins or ties
-      everywhere.
+      placements at this node; wins or ties everywhere.
     - "cell": always the empty cell with the fewest live placements.
-    - "block": always the unplaced block with the fewest. Sound, and
-      a useful baseline, but much the weakest: it cannot notice a
-      cell that nothing can cover until some block runs out of room,
-      so it prunes almost nothing where little is pre-filled. On a
-      book puzzle that costs a factor (worst measured:
-      main_puzzles/65, 2 s against 0.01 s); on the empty main board
-      it finds no solution at all in 30 s, against ~1 ms for "both".
+    - "block": always the unplaced block with the fewest. A baseline:
+      it can't see a cell nothing covers until some block runs out of
+      room, so it barely prunes an open board (the empty main board: no
+      solution in 30 s, against ~1 ms for "both").
 
     Measurements for the three modes are in docs/DESIGN_NOTES.md.
 
-    `order` ranks each node's candidate placements. It changes the
-    order solutions come out in, never the set. The rank is a property
-    of a placement rather than of the item that was branched on, so
-    ordering is uniform across all three `branch` modes by
-    construction.
+    `order` ranks each node's candidate placements, in all three `branch`
+    modes; it changes the order solutions come out in, never the set.
 
-    - True: each candidate's cells' live-placement counts, sorted
+    - True: by each candidate's cells' live-placement counts, sorted
       ascending and compared like a tuple, so a placement covering the
       scarcest cells goes first.
-    - False: table order (but see the seed note above).
-    - None (the default): True exactly when a limit is set, which is
-      when it can pay -- a full enumeration visits the same nodes
-      whatever order siblings are tried in, so there it is pure
-      overhead.
+    - False: table order (or, seeded, by the seed's priority alone).
+    - None (the default): True exactly when a limit is set -- a full
+      enumeration visits the same nodes in any order, so there it is
+      pure overhead.
     """
     branch_rule, rank_rule = _resolve_rules(seed, time_limit, max_solutions, order, branch)
     if max_solutions <= 0 or time_limit <= 0:
         return False
 
-    # Built once per Setup and shared by every search on it.
     t = puzzle.setup.kernel_tables
     n_placements = t.pmask.shape[0]
     if seed is None:
@@ -159,8 +138,8 @@ def solve_rows(
     # columns never change, and a searched path fills in the rest.
     base = np.array(list(puzzle.chosen_placement_idx.values()), dtype=np.int64)
 
-    # The kernel is never told max_solutions -- it gets a per-call
-    # buffer cap and a node budget, and all the counting stays here.
+    # The kernel is never told max_solutions: it gets a per-call buffer cap
+    # and a node budget, returns FULL/BUDGET/DONE, and the counting stays here.
     cap = _SOL_CAP
     if max_solutions < math.inf:
         cap = int(min(_SOL_CAP, math.ceil(max_solutions)))

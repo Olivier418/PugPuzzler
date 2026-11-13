@@ -26,5 +26,9 @@ dependencies = [
     "adjustText>=1.0",
 ]
 
+[project.optional-dependencies]
+# The tutorial notebooks.
+notebooks = ["jupyter"]
+
 [tool.setuptools.packages.find]
 include = ["pugpuzzler*"]

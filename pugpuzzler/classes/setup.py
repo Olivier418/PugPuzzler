@@ -11,39 +11,33 @@ from .rendering import render as _render
 
 
 class Setup:
-    """The fixed setup shared by every game: a board, a block
-    collection, and the (expensive to compute) valid placements for each
-    block on that board.
-
-    None of this depends on which specific solution a puzzle uses, so it
-    is computed once here and then shared BY REFERENCE across every
-    Game/Puzzle built on top of it, instead of being recomputed from
-    scratch for each one.
-    """
+    """A board, a block collection, and every valid placement of each block
+    on that board (expensive to compute). None of it depends on a puzzle's
+    pre-filled cells, so it is computed once and shared by reference by
+    every Puzzle on that board."""
 
     def __init__(self, blocks: BlockCollection, board: Board):
         self.board = board
         self.blocks = blocks
         self._validate_area()
 
-        # Compact indexing: internally, grids only ever cover the board's
-        # real cells (no OUTSIDE_BOARD dead weight -- can be ~half the
-        # array on a PyramidBoard). compact_to_flat/flat_to_compact map
-        # between that dense 0..n_cells-1 range and the full board-shaped
-        # flat indexing placements are computed in.
+        # Compact indexing: grids only cover the board's real cells (no
+        # OUTSIDE_BOARD cells -- over half the array on a PyramidBoard).
+        # compact_to_flat/flat_to_compact map between 0..n_cells-1 and flat
+        # indices into the full board shape.
         cells_flat = self.board.cells.ravel()
         self.compact_to_flat = np.flatnonzero(cells_flat)
         self.n_cells = self.compact_to_flat.size
         self.flat_to_compact = np.full(cells_flat.size, -1, dtype=np.int64)
         self.flat_to_compact[self.compact_to_flat] = np.arange(self.n_cells)
 
-        # Placements are computed as flat indices into the full board
-        # shape and re-based into compact space once here, so every other
-        # consumer (Puzzle.grid, the solver) only ever deals with the dense
-        # range. One (N, block size) array per block, in block order.
+        # One (N, block size) array of compact cell indices per block, in
+        # block order (computed as flat indices, re-based once here).
         self.placement_cells = [self.flat_to_compact[flat] for flat in self._compute_placement_indices()]
 
     def _valid_orientations(self, block: Block) -> list[np.ndarray]:
+        """Every distinct orientation of `block` on this board, as board
+        coordinates shifted to start at 0 and sorted."""
         k = block.ndim
 
         G_board2 = self.board.gram2
@@ -51,20 +45,17 @@ class Setup:
         # doubled Gram matrix is 2I (see Board.gram2).
         G_piece2 = 2 * np.eye(k, dtype=int)
 
-        # 1. All unit vectors in board space, i.e. v^T @ (2G) @ v == 2.
-        # Cached on the board, so this is computed once per board and
-        # reused across every block, rather than recomputed each time.
         candidate_vecs = self.board.unit_vectors
 
-        # 2. Find valid transformation matrices M composed of orthogonal unit vectors
+        # Every map M from the block's axes onto board unit vectors that
+        # preserves distances is an orientation.
         unique_shapes = []
         seen = set()
 
         for cols in itertools.product(candidate_vecs, repeat=k):
             M = np.column_stack(cols)  # Shape (d, k)
 
-            # Check if M preserves physical distances in pure integer arithmetic:
-            # M^T @ (2G_board) @ M == 2G_piece
+            # distance-preserving, in integers: M^T @ (2G_board) @ M == 2G_piece
             if np.array_equal(M.T @ G_board2 @ M, G_piece2):
                 board_coords = block.coords @ M.T
                 board_coords -= board_coords.min(axis=0)
@@ -121,18 +112,13 @@ class Setup:
                 f"Total block cells ({total_cells}) do not match board cells ({board_cells})."
             )
 
-    # ---- derived tables -------------------------------------------------
-    # Lazily built and then shared by reference across every Puzzle in a
-    # book, exactly like placement_cells above. A Setup that is only ever
-    # printed pays for none of it.
+    # ---- derived tables (lazy, shared like placement_cells) -------------
 
     @cached_property
     def kernel_tables(self) -> kernel.Tables:
-        """Everything the search needs that depends on the board and blocks
-        alone, and nothing that depends on which cells a particular puzzle
-        starts with. ~70 KB, ~7 ms to build -- and a book is 72 puzzles on
-        one Setup, so caching it here rather than per puzzle is worth ~2x on
-        a whole-book solve."""
+        """The search's static tables (see kernel.Tables): ~70 KB, ~10 ms
+        to build. A book is up to 72 puzzles on one Setup, so caching them
+        here rather than per puzzle is worth ~2x on a whole-book solve."""
         return kernel.build_tables(self.placement_cells, self.n_cells)
 
     @cached_property
@@ -184,10 +170,9 @@ class Setup:
         return rows
 
     def warmup(self):
-        """Get everything a first solve would pay for up front: build
-        kernel_tables and load the compiled kernel (see kernel.warmup).
-        Call before starting a timer. The JIT part is per process, not
-        per Setup, so repeat calls on any Setup are free."""
+        """Pay a first solve's one-off costs up front (build kernel_tables,
+        load the compiled kernel; see kernel.warmup): call before starting a
+        timer. The JIT part is per process, so repeat calls are free."""
         kernel.warmup(self.kernel_tables)
 
     def render(
@@ -200,21 +185,9 @@ class Setup:
         letters: bool = True,
         mark: int = None,
     ) -> str:
-        """Build the text representation used by every __repr__ in this
-        module: an optional header, then the board, and -- when
-        `leftover_idcs` is given -- shape diagrams of those blocks laid
-        out underneath the board. The actual rendering lives in
-        `classes.rendering` (a display concern, not part of this class's
-        board/blocks/placements model); this is a thin facade so callers
-        can keep saying `setup.render(...)`.
-
-        `grid` is compact (see __init__); rendering needs the real
-        board shape (with OUTSIDE_BOARD filled back in) to draw the
-        board's silhouette, so it's expanded here at this one boundary.
-        `labels` (strings drawn in empty cells) is compact too and expanded
-        the same way, and `mark` is a compact cell index; `cell_width` and
-        `letters` pass through as they are (see rendering.grid_lines).
-        """
+        """rendering.render on compact arguments: `grid` and `labels` are
+        compact and expanded to the full board shape here, `mark` is a
+        compact cell index; the rest pass through (see rendering.grid_lines)."""
         full_labels = None
         if labels is not None:
             full_labels = np.full(self.board.cells.size, '', dtype=object)
@@ -228,10 +201,8 @@ class Setup:
                        letters=letters, mark=full_mark)
 
     def to_full_grid(self, grid: np.ndarray) -> np.ndarray:
-        """Scatter a compact (n_cells,) grid back into a full board-shaped
-        array, OUTSIDE_BOARD everywhere else. Used at the rendering and
-        disk-serialization boundaries -- the only places that need the
-        real board shape back."""
+        """A compact (n_cells,) grid as a full board-shaped array,
+        OUTSIDE_BOARD everywhere else (for rendering and writing to disk)."""
         full = np.full(self.board.cells.size, OUTSIDE_BOARD, dtype=grid.dtype)
         full[self.compact_to_flat] = grid
         return full.reshape(self.board.cells.shape)

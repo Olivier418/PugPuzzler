@@ -8,11 +8,7 @@ this module's flat integer world and those objects.
 **Representation.** A cell is a bit. The board's occupancy is `occ`, an
 array of `NW = ceil(n_cells / 64)` uint64 words, and a placement is the
 same thing precomputed (`pmask[gid]`). "Does this placement fit" is then
-one AND per word: the conflict test reads 8 bytes.
-
-That makes the conflict test nearly free, so what a node costs is
-`choose_item`, which has to look at the candidate lists to stay
-well-informed.
+one AND per word, nearly free, so what a node costs is `choose_item`.
 
 **Branching.** A node branches on the scarcest *item*, and an item is
 either an empty cell (try every placement covering it) or an unplaced
@@ -21,11 +17,9 @@ so either is sound on its own; taking the minimum over both is strictly
 better informed than either, and is the default. See `choose_item`.
 
 `nw` is read from `occ.shape[0]` at runtime and every mask operation
-loops over it, so there is no cell-count ceiling anywhere and no separate
-code path for big boards: 55 cells (IQpuzzler) and 64 (exactly at the
-one-word boundary) both give NW == 1, and a 200-cell board would give
-NW == 4 and work unchanged. The word loop costs ~1.19x against a
-hand-written scalar kernel.
+loops over it, so there is no cell-count ceiling and no separate path for
+big boards: 55 cells (IQpuzzler) and 64 both give NW == 1, a 200-cell
+board NW == 4.
 
 **Global ids.** A placement's global id is its row in `pmask`,
 and block position p owns the contiguous run
@@ -72,15 +66,9 @@ _INF = np.int32(np.iinfo(np.int32).max)
 
 
 class Tables(NamedTuple):
-    """Everything derived from a Setup alone. Built once per Setup and
-    shared by every search on it -- a whole book is one board and one
-    block collection, and none of this depends on which cells a
-    particular puzzle starts with.
-
-    A NamedTuple because numba accepts one as an argument (verified with
-    cache=True) while keeping the call sites readable; it is immutable,
-    which is what makes sharing it safe.
-    """
+    """Everything derived from a Setup alone, built once per Setup and
+    shared by every search on it. A NamedTuple: numba accepts it as an
+    argument (with cache=True), and it is immutable, so sharing is safe."""
     pmask: np.ndarray       # (n_total, NW) uint64  -- placement occupancy
     pblock: np.ndarray      # (n_total,)    uint8   -- block *position*
     pcells: np.ndarray      # (n_total, kmax) int16 -- cell indices, -1 padded
@@ -204,19 +192,13 @@ def _fits(pmask, gid, occ, nw):
 
 @njit(cache=True)
 def _live(pmask, pblock, gid, occ, used, nw):
-    """The one liveness predicate, shared by every candidate collector:
-    the placement overlaps nothing already down, and its block is not
-    already placed.
+    """The one liveness predicate: the placement overlaps nothing already
+    down, and its block isn't placed yet.
 
-    Writing it twice is the sharpest hazard here. `choose_item` picks the
-    item with the fewest live candidates and `collect_cell`/
-    `collect_block` then materialise them; if the counters and the
-    collectors ever disagreed, the counts steering MRV would be lies --
-    and a count of 0 is taken as proof that the node is dead. So
-    `_count_cell` and `_count_block` must stay exactly this predicate
-    (`_count_block` drops the block half only because its caller has
-    already established the block is unplaced).
-    """
+    The counters (`_count_cell`, `_count_block`) must stay exactly this
+    predicate as the collectors use it: a count steers MRV, and a count of
+    0 is taken as proof the node is dead. (`_count_block` drops the block
+    half because its caller already knows the block is unplaced.)"""
     if used & BIT[pblock[gid]] != _U0:
         return False
     return _fits(pmask, gid, occ, nw)
@@ -237,16 +219,12 @@ def collect_cell(t, c, occ, used, nw, out):
 @njit(cache=True)
 def _count_cell(t, c, occ, used, nw, cap):
     """How many live placements cover cell `c`, giving up once `cap` of
-    them are known. Same predicate as collect_cell, without materialising
-    the list.
+    them are known.
 
-    The cap is what makes the MRV scan affordable. Only the *minimum*
-    matters, so once a cell is known to have at least as many candidates
-    as the best cell so far it cannot win and the rest of its list is
-    dead weight -- and cells have ~150 placements each while the running
-    best is usually in the single digits, so the scan almost always stops
-    after a handful of tests instead of walking the whole list.
-    """
+    The cap is what makes the MRV scan affordable: once a cell has as many
+    candidates as the best so far it can't win, and with ~150 placements
+    per cell against a running best usually in single digits, the scan
+    stops after a handful of tests."""
     n = 0
     for i in range(t.cell_start[c], t.cell_start[c + 1]):
         if _live(t.pmask, t.pblock, t.cell_pl[i], occ, used, nw):
@@ -258,9 +236,7 @@ def _count_cell(t, c, occ, used, nw, cap):
 
 @njit(cache=True)
 def collect_block(t, pos, occ, used, nw, out):
-    """Live placements of block position `pos`, in table order. The
-    block-branch counterpart of collect_cell -- same `_live`, so the two
-    candidate sets are filtered identically. Returns how many."""
+    """Live placements of block position `pos`, in table order. Returns how many."""
     n = 0
     for gid in range(t.block_start[pos], t.block_start[pos + 1]):
         if _live(t.pmask, t.pblock, gid, occ, used, nw):
@@ -271,13 +247,8 @@ def collect_block(t, pos, occ, used, nw, out):
 
 @njit(cache=True)
 def _count_block(t, pos, occ, nw, cap):
-    """How many live placements block position `pos` still has, giving up
-    once `cap` of them are known -- _count_cell's counterpart, and capped
-    for the same reason.
-
-    No `used` argument: the caller only ever asks about an unplaced
-    block, so `_live` reduces to `_fits`.
-    """
+    """How many live placements unplaced block position `pos` still has,
+    giving up once `cap` of them are known (see _count_cell)."""
     n = 0
     for gid in range(t.block_start[pos], t.block_start[pos + 1]):
         if _fits(t.pmask, gid, occ, nw):
@@ -295,18 +266,14 @@ def choose_item(t, occ, used, nw, branch):
     Both kinds are sound branch sets on their own -- every solution
     covers a given cell exactly once, and places a given block exactly
     once -- so either partitions the node's solutions. They are also
-    directly comparable: a child of either kind places exactly one
-    block, so an equal candidate count means an equal branching factor.
-    That is what lets BRANCH_BOTH simply take the minimum over the two,
-    which is strictly better informed than either alone (BRANCH_CELL and
-    BRANCH_BLOCK exist as baselines).
+    directly comparable (a child of either kind places one block), which
+    is what lets BRANCH_BOTH simply take the minimum over the two.
 
-    Minimum remaining values, in both loops: the scan is capped at the
-    best count so far (see _count_cell), and it prunes for free. A count
-    of 0 means the node is dead -- a cell nothing can cover, or a block
-    with nowhere left to go -- and returning it yields an empty candidate
-    list, which makes the caller backtrack at once. A count of 1 is
-    forced, and nothing can be scarcer, so the scan stops there too.
+    Minimum remaining values, the scan capped at the best count so far
+    (see _count_cell). A count of 0 (a cell nothing can cover, a block
+    with nowhere to go) is returned at once and gives an empty candidate
+    list, so the caller backtracks; a count of 1 is forced and also stops
+    the scan.
 
     Cells are scanned first and the comparison is strict, so a cell wins
     a tie. Never returns -1: `kernel` tests `occ == full` before calling
@@ -349,11 +316,8 @@ def choose_item(t, occ, used, nw, branch):
 
 @njit(cache=True)
 def _cell_count(t, c, occ, used, nw, cnt, stamp, stamp_id):
-    """Live placements through cell `c`, memoised for this node.
-
-    Bounds RANK_COUNTS at one pass per *distinct* cell the candidates
-    touch, rather than one per (candidate, cell) pair.
-    """
+    """Live placements through cell `c`, memoised per node, so RANK_COUNTS
+    scans each distinct cell once rather than once per candidate."""
     if stamp[c] == stamp_id:
         return cnt[c]
     n = _count_cell(t, c, occ, used, nw, _INF)
@@ -366,20 +330,11 @@ def _cell_count(t, c, occ, used, nw, cnt, stamp, stamp_id):
 def rank(t, cands, n, occ, used, rule, priority, cnt, stamp, stamp_id, key, idx):
     """Sort `cands[:n]` in place, best first.
 
-    One implementation for both branch kinds, and it never learns which
-    it was handed: the key is a property of a *placement*, not of the
-    item the node branched on. That is what makes the `order` option
-    uniform across cell and block branches for free.
-
-    Every rule ends in `priority[gid]`, which is a permutation, so the
-    order is total and no two candidates ever compare equal. That matters
-    for reproducibility: a non-total order would let the representative
-    depend on call history.
-
-    RANK_PRIORITY has no branch of its own below on purpose -- it is the
-    fall-through, leaving every key column at _INF so only that final
-    priority column decides. It is what a seeded `order=False` solve uses.
-    """
+    The key is a property of a *placement*, not of the item the node
+    branched on, so one implementation serves both branch kinds. Every key
+    ends in `priority[gid]`, a permutation, so the order is total.
+    RANK_PRIORITY is the fall-through: every other key column stays _INF
+    and only the priority decides."""
     if n < 2 or rule == RANK_NONE:
         # Survivors per node are mean 1.0, median 0 -- this short-circuits
         # the large majority of nodes, which is why ranking is cheap.
@@ -403,7 +358,7 @@ def rank(t, cands, n, occ, used, rule, priority, cnt, stamp, stamp_id, key, idx)
                 if c >= 0:
                     key[i, m] = _cell_count(t, c, occ, used, nw, cnt, stamp, stamp_id)
                     m += 1
-            for a in range(1, m):          # insertion sort, m <= kmax <= 8
+            for a in range(1, m):          # insertion sort, m <= kmax (5 in IQpuzzler)
                 v = key[i, a]
                 b = a - 1
                 while b >= 0 and key[i, b] > v:
@@ -453,13 +408,10 @@ def kernel(t, w, cap, budget, rule, priority, branch):
     exhausted), FULL (`sol_buf` holds `cap` solutions) or BUDGET (`nodes`
     reached `budget`). For FULL and BUDGET the caller drains `sol_buf` and
     calls again to continue; `w` carries the whole stack, so re-entry is
-    literally "run the loop again" and there is no separate resume path
-    to get wrong.
+    just "run the loop again".
 
-    Explicit stack rather than recursion: numba's recursion support
-    segfaulted on this search, and a stack is what makes the run
-    resumable, which is what lets classes.solver stay a lazy generator
-    with an exact time limit.
+    Explicit stack rather than recursion: numba's recursion segfaulted on
+    this search, and a stack is what makes the run resumable.
 
     Loop invariant, true at the top of every iteration and therefore at
     every return: `occ`/`used` reflect exactly `st_gid[0:depth]`, and
@@ -501,20 +453,14 @@ def kernel(t, w, cap, budget, rule, priority, branch):
                     return FULL, n_sol, nodes
                 continue
 
-            # Branch on the scarcest item, cell or block. Everything
-            # below this point is identical either way -- which is what
-            # makes `rank` (and so the `order` option) apply uniformly to
-            # both kinds of candidate list.
+            # Branch on the scarcest item, cell or block; the rest is the same either way.
             kind, i = choose_item(t, w.occ, w.used[0], nw, branch)
             if kind == 0:
                 n = collect_cell(t, i, w.occ, w.used[0], nw, w.st_cands[depth])
             else:
                 n = collect_block(t, i, w.occ, w.used[0], nw, w.st_cands[depth])
-            # The memo stamp has to be unique per node across the WHOLE
-            # run, not per call: `nodes` restarts at 0 every chunk, so
-            # deriving the stamp from it would let a node reuse a stale
-            # cnt[c] left by a same-numbered node of an earlier chunk.
-            # ctl[2] is int64 and only ever increments.
+            # The memo stamp must be unique across the whole run, not per
+            # call (`nodes` restarts every chunk), hence a counter in ctl.
             w.ctl[2] += 1
             rank(t, w.st_cands[depth], n, w.occ, w.used[0], rule, priority,
                  w.cnt, w.stamp, w.ctl[2], w.key, w.idx)
@@ -555,18 +501,13 @@ _warm = False
 
 
 def warmup(t):
-    """Compile/load every njit function, on a throwaway one-node budget.
-    Idempotent: only the first call in a process does anything.
-
-    The first kernel() call in a process pays numba's cache load (~0.35 s)
-    or, if this file changed, a full compile (seconds). Callers that time
-    a solve run this before starting the clock, so that cost isn't billed
-    to the first puzzle. benchmark.py also calls it in the parent: its
-    per-trial subprocesses would otherwise race to write
-    classes/__pycache__/kernel-*.nbi and each pay the compile.
-
-    Numba specializes on argument types, not sizes, so any Tables will do.
-    """
+    """Compile/load every njit function on a throwaway one-node budget;
+    only the first call in a process does anything. That first call pays
+    numba's cache load (~0.35 s) or, after an edit to this file, a full
+    compile (seconds), so timed solves call this before their clock starts.
+    benchmark.py calls it in the parent too, so its trial subprocesses
+    don't race to write the cache. Any Tables will do: numba specializes
+    on types, not sizes."""
     global _warm
     if _warm:
         return

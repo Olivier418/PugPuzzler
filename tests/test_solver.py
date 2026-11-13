@@ -14,12 +14,12 @@ from pugpuzzler.serialization import load_game
 from pugpuzzler.solving import solve_puzzle
 from tests._helpers import ROOT, load, rows, write_pentomino_game
 
-# None of these may change the solution set. branch="block" is left out on
-# open boards, where it finds nothing in 30 s (see solver.solve_rows).
+# None of these may change the solution set.
 MODES = [
     {"branch": "cell"}, {"branch": "block"}, {"branch": "both"},
     {"order": True}, {"order": False}, {"seed": 0}, {"seed": 1, "order": True},
 ]
+# branch="block" finds nothing in 30 s on an open board (see solver.solve_rows)
 OPEN_MODES = [m for m in MODES if m.get("branch") != "block"]
 
 

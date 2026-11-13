@@ -4,7 +4,17 @@
 decisions behind it: what was measured, and the ideas that were built, tested
 and left out, so that anyone considering them again can see how they fared.
 
-Absolute timings on this laptop drift by up to 3x between runs, so every table
+**Two solvers.** The project's first solver was written in NumPy and kept, for
+every cell and block, a running count of the placements still available,
+updating those counts on every move. It was replaced by the current one
+(`pugpuzzler/classes/kernel.py`), a numba-compiled depth-first search on
+bitmasks that recounts at every node instead and is about 2.9x faster over a
+full enumeration of both games. A few results below were measured on the first
+solver and are marked *(first solver)*. Their absolute times can't be compared
+with the current solver's, but they are kept because the conclusions drawn
+from them still hold.
+
+Absolute timings on the device that was used drifted by up to 3x between runs, so every table
 below reports **node counts** alongside time, and the node counts are the
 figures to trust. Timings are best-of-3, interleaved.
 
@@ -19,12 +29,10 @@ exactly once, and places a given block exactly once, so either is sound alone.
 
 The two counts are directly comparable at 1:1, with no weight to tune: a child
 of either kind places exactly one block, so an equal candidate count means an
-equal branching factor *and* equal progress. (A weighted variant was measured on
-the old solver across `w` = 0.25 … 2. A mild block preference, `w` = 0.5–0.75,
-was a few percent better on three cases out of four and worse on the fourth,
-so not worth a knob. Keying on each item's count *relative* to its count at the
-root was worse everywhere, up to 5.5x: MRV's whole justification is that the
-candidate count **is** the branching factor, and a ratio does not bound it.)
+equal branching factor *and* equal progress. (Keying on each item's count
+*relative* to its count at the root was measured on the first solver and was
+worse everywhere, up to 5.5x: MRV's whole justification is that the candidate
+count **is** the branching factor, and a ratio does not bound it.)
 
 Full enumeration of each book, and a fixed solution count on the empty boards:
 
@@ -54,17 +62,20 @@ item cannot beat the best so far. Cells have ~150 placements each while the
 running best is usually single digits, so the scan almost always stops after a
 handful of tests. This alone took MRV from 243k to ~400–500k nodes/s.
 
-**The obvious thing still not done** is maintaining the counts incrementally on
-top of the bitmask. The old NumPy solver did that: cheap per node, but paid for
-by the conflict-list memory traffic that held it to 76k nodes/s. Doing it over
-bitmasks would be the best of both, and is where the next factor is.
+**Incremental counts are not worth it.** The alternative to recounting is
+maintaining every item's count as blocks go down, as the first solver did.
+Measured on IQpuzzler `main_puzzles` 40–60: the capped scan costs ~156 `_fits`
+tests per node (one AND each, all in L1), while each placement kills ~44 live
+placements, i.e. ~490 counter updates per node counting the undo, plus the work
+of finding those kills (conflict lists, or a placements² bitset that outgrows
+the cache). The cap already made recounting cheaper than bookkeeping.
 
 ## 2. `order`: ranking a node's candidates
 
 Sorting each node's candidates cannot change a full enumeration's node set at
 all: sibling order does not decide which nodes exist. It does find the first
 solutions markedly sooner (time-to-first summed over both IQpuzzler books:
-0.37 s with, 0.60 s without, on the old solver). It also costs ~25% of runtime.
+0.37 s with, 0.60 s without, *(first solver)*). It also costs ~25% of runtime.
 
 So it is an option, defaulting to on exactly when `time_limit` or
 `max_solutions` is set, which is precisely when finding solutions early is
@@ -75,7 +86,7 @@ told which it was handed: the key is a property of a *placement*, not of the
 item the node branched on. That is why `order` behaves identically under all
 three `branch` modes, with nothing to keep in sync.
 
-**Removed 2026-09-28: two more ranking rules.** `"pockets"` ranked a candidate
+**Removed: two more ranking rules.** `"pockets"` ranked a candidate
 by how many empty cells it would strand with no empty neighbour (rejecting a
 dead branch one ply early; it needed a per-cell adjacency table, `Tables.neigh`),
 and `"fanout"` by how many options it left for the next empty cell. Benchmarked
@@ -94,8 +105,10 @@ solution):
 No rule wins on every board, and plain table order (`False`) is best or close
 on most, so the two extra rules weren't worth their ~60 lines of kernel. Note
 that `counts` (what `order=None` picks when a limit is set) is also the
-slowest on three of the five by throughput; the default may deserve a second
-look.
+slowest on three of the five by throughput. It is the default under a limit
+because it tends to find the first solutions sooner, not because it finds the
+most per second: for long sampling runs, `order=False` can be the better
+choice.
 
 ---
 
@@ -126,15 +139,16 @@ solutions, 2 up to the rectangle's symmetry) and on self-symmetric fixtures.
 
 - **It did nothing on real puzzles.** Across all 221 book puzzles in both
   shipped games it moved the node count by at most 1.4%, and on PRO
-  `main_puzzles` not at all: identical to the unit, i.e. the reduction never
+  `main_puzzles` not at all: identical node counts, i.e. the reduction never
   fired once.
 - It forced a Python-side "symmetric spine" above the kernel, with its own
   block-branching, orbit and transform machinery, because the orbit argument
   needs a branch set the group carries onto itself (a block's candidates
-  qualify; a cell's do not) plus `Setup.placement_lookup` and State transforms,
-  none of which can exist inside the kernel.
-- ~500 lines across `solver.py`, `setup.py` and `lattice.py`, plus a 286-line
-  test file, to maintain for that.
+  qualify; a cell's do not) plus a lookup from a transformed placement back to
+  its index and transforms of the board state, none of which can exist inside
+  the kernel.
+- ~500 lines across the solver, the setup and a separate lattice-geometry
+  module, plus a 286-line test file, to maintain for that.
 
 Measured before removal, full enumeration per book:
 
@@ -165,12 +179,12 @@ Every real puzzle ties or gets faster; the two fully-empty standalone boards pay
 
 **If it is ever wanted back**, the cheap version is a post-filter:
 canonicalise each finished solution under the board's symmetry group and keep
-the first of each class. That needs only the geometry (`Lattice.point_group`
-and a region-symmetry search over it), not the orbit machinery, but it does
+the first of each class. That needs only the geometry (the board's symmetry
+group and a search for the symmetries of the open region), not the orbit machinery, but it does
 strictly more work than enumerating, and it cannot be made exact under
 `max_solutions`, which is why it was not kept.
 
-## 4. Removed earlier: partitioning into components
+## 4. Removed: partitioning into components *(first solver)*
 
 Not a symmetry, but the same kind of question: what to do when the open region
 falls apart into connected components. Two variants were measured: **prune**
@@ -198,17 +212,3 @@ Three reasons it does not transfer to an MRV search:
 - The check costs 11–28 µs against 70–100 µs of node work, so even PRO
   `main_puzzles`' 16% fewer nodes only breaks even. PRO's diagonal `alt` board,
   which splits constantly, is the one place it wins.
-
----
-
-## 5. History
-
-The numbers in §4 and the weighted-branching numbers in §1 were measured on an
-earlier NumPy solver that maintained `live`/`counts` incrementally. It no longer
-exists: `pugpuzzler/classes/kernel.py` replaced it with a numba-compiled bitmask DFS on
-2026-09-23, worth ~2.9x over a full enumeration of both games. Those figures are
-kept because the *reasoning* still holds; no absolute number in them is
-comparable to the current solver.
-
-The symmetry reduction is in this repo's history up to the commit that removed
-it (2026-09-23); `4b4c9f0` has the NumPy-era version of it.

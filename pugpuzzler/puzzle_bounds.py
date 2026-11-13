@@ -194,33 +194,26 @@ def _time_bound_book(
 
 
 def compute_puzzle_bounds(empty_solution: Solution, empty_stats: SolveStats, verbose: bool = True) -> Bounds:
-    """The bounds on the number of solutions at every attainable number of
-    filled cells on a board, from every solution of its empty board: one
-    puzzle with the fewest solutions possible at that count (the lower
-    bound) and one with the most (the upper bound) -- exact (ties go to
-    whichever the search meets first), one example per count even where the
-    bound is 1. Both include the empty board (0 filled) and exclude the
-    finished one.
+    """The exact bounds on the number of solutions at every attainable
+    filled-cell count of a board, from 0 (the empty board) to one block
+    short of full: one puzzle with the fewest solutions (lower bound) and
+    one with the most (upper bound) per count, ties going to whichever the
+    search meets first.
 
     `empty_solution`/`empty_stats` are a complete solve of an empty puzzle
-    (e.g. game.puzzles["empty_main"]), solved now with solving.solve_puzzle or
-    loaded with serialization.load_complete_run -- ~15 min to solve for
-    IQpuzzlerPRO main, so save it. The board is the one that puzzle is on.
+    (e.g. game.puzzles["empty_main"]), from solving.solve_puzzle or
+    serialization.load_complete_run (~15 min to solve for IQpuzzlerPRO
+    main, so save it).
 
     Returns ((lower_puzzles, lower_stats), (upper_puzzles, upper_stats)):
-    two PuzzleBooks, named constants.LOWER_BOUND_BOOK / UPPER_BOUND_BOOK,
-    with their puzzles named 1, 2, 3, ... by increasing filled count and
-    tagged constants.HARDEST_DIFFICULTY / EASIEST_DIFFICULTY (colored by
-    plotting.plot_puzzle_stats via constants.BOUND_COLORS), and each book's
-    stats by puzzle name, puzzle 1's being `empty_stats`. plotting.plot_bounds
-    draws them as a band. No solutions: the empty board and the low-filled
-    upper bounds have far too many for that; solve a book with
-    solving.solve_puzzlebook if its solutions are wanted.
+    PuzzleBooks named LOWER_BOUND_BOOK / UPPER_BOUND_BOOK, puzzles named
+    1, 2, 3, ... by filled count and tagged HARDEST_DIFFICULTY /
+    EASIEST_DIFFICULTY, and their stats by name (puzzle 1's = `empty_stats`).
+    No solutions: the low-filled ones have far too many.
 
-    Always computes -- the grouping (minutes at most), then one timed solve
-    per bound puzzle, dominated by the upper book's low-filled puzzles.
-    Nothing is read or written: keep the result with
-    serialization.save_bounds, read it back with serialization.load_bounds."""
+    Takes the grouping (minutes at most) plus one timed solve per bound
+    puzzle. Reads and writes nothing: see serialization.save_bounds /
+    load_bounds."""
     empty = empty_solution.puzzle
     if empty.nr_filled_cells:
         raise ValueError(f"Puzzle {empty.name} isn't empty: it has {empty.nr_filled_cells} filled cells.")
