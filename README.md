@@ -15,6 +15,8 @@ It started as a project to investigate the difficulty of such games, but grew in
 - easy loading and saving of new puzzles
 - tools for investigating the puzzles and their solutions
 
+For a short introductory video, have a look [here](https://youtu.be/IFgjPZP_09M)!
+
 ## Why
 
 As a kid I would often spend hours at a time trying to solve the puzzles from the **IQpuzzler** from SmartGames.
